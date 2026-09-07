@@ -117,8 +117,11 @@ Tests assert intended behaviour rather than observed behaviour. Where a system v
 
 **Performance approach.** k6 against demoblaze, as two parallel scenarios in one script:
 
-- A browsing scenario following a sourced funnel: 100% land, ~45% view a product, ~9% add to cart, ~7% reach the cart, ~2.7% purchase. Derived from published e-commerce benchmarks (Baymard's ~70% documented cart abandonment; Littledata add-to-cart and conversion rates), which are internally consistent: 9% add-to-cart against 70% abandonment yields the 2.7% conversion the benchmarks independently report. Figures to be verified against current published sources at writing time.
-- A constant-rate checkout scenario, because at a realistic 2.7% conversion the checkout path would otherwise receive too few samples for a meaningful percentile.
+- A browsing scenario following a sourced funnel: 100% land, ~35% view a product, ~7.5% add to cart, ~6% reach the cart, ~1.9% purchase. The add-to-cart and purchase figures are taken from a single published dataset (7.52% and 1.89% of sessions respectively) so that they are internally consistent rather than spliced from sources with different methodologies; they imply a cart abandonment rate of ~74.9%, which sits inside Baymard Institute's documented 55%–84.27% spread while running above its 70.19–70.22% headline average. The product-page view rate is the midpoint of a wide 23%–50% spread across studies and is the least reliable figure in the model. The cart-page rate is derived, not benchmarked, and is labelled as such.
+
+  Two caveats are recorded alongside the numbers. First, Baymard's ~70% abandonment figure is measured against *carts initiated*, not browsing sessions, and is routinely misquoted as a session-level number; this model applies it correctly to the add-to-cart cohort. Second, with the exception of Baymard, these are aggregator figures published by analytics vendors and marketing blogs, and they disagree by methodology. The performance plan cites ranges with a chosen point estimate rather than presenting bare numbers as fact.
+
+- A constant-rate checkout scenario, because at a realistic 1.9% conversion the checkout path would otherwise receive too few samples for a meaningful percentile. At 20 concurrent users over a seven-minute run, the funnel scenario alone would produce a single-digit number of completed purchases.
 
 Protocol-level virtual users generate load; a small number of browser-level virtual users measure Core Web Vitals under that load. Protocol-only measurement cannot see that the home page makes two chained round-trips before rendering a product; browser-only cannot generate load.
 
