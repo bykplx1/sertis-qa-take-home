@@ -33,8 +33,9 @@ only breaks when the tests or the server's own behaviour actually change.
 This asymmetry means the `@e2e` suite will **decay** — accumulate failures caused by drift in
 the target rather than by regressions in the product — in a way the `@api` suite structurally
 cannot. In this ten-day engagement that risk is accepted and mitigated with resilient,
-text/role-based selectors and a two-retry policy (see `CONTEXT.md`, `docs/adr/` for the
-selector-strategy decision). In any engagement longer than this one, the recommendation is a
+text/role-based selectors and a two-retry policy (see `SPEC.md`'s "Selector strategy" and
+"Retries" sections for that decision; it is not yet recorded as a standalone ADR). In any
+engagement longer than this one, the recommendation is a
 **controlled test environment**: a self-hosted or containerised mirror of the target(s) that the
 team seeds, resets, and instruments, so failures are attributable to the product rather than to
 the internet between the runner and someone else's server. Task 2 below scopes that
