@@ -1,3 +1,4 @@
+import { type Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 
 // Two distinct, low-priced, unambiguous products under "Phones" — same
@@ -7,6 +8,16 @@ import { test, expect } from './fixtures';
 const CATEGORY = 'Phones' as const;
 const PRODUCT_A = 'Samsung galaxy s6';
 const PRODUCT_B = 'Nokia lumia 1520';
+
+// demoblaze keys the anonymous cart by a `user` cookie set on landing
+// (distinct from the `tokenp_` cookie login adds). WEB-010 claims this
+// cookie survives login unchanged while the cart view still comes back
+// empty — read directly rather than asserted from memory, so the test
+// itself proves (or disproves) the mechanism the defect id claims.
+async function userCookieValue(page: Page): Promise<string | undefined> {
+  const cookies = await page.context().cookies();
+  return cookies.find((cookie) => cookie.name === 'user')?.value;
+}
 
 // TC-07 in docs/test-cases.md, extended to also cover this issue's first two
 // acceptance criteria (several products appear in the cart; the total is
@@ -75,6 +86,7 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
 // logging in, but the post-login cart view does not surface items added
 // under it. Registered as WEB-010 in docs/defects.md.
 test('TC-08: adding to cart while logged out, then logging in, preserves the cart — WEB-010 @e2e', async ({
+  page,
   homePage,
   productPage,
   cartPage,
@@ -101,14 +113,26 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
   expect(await cartPage.itemCount()).toBe(1);
   const totalWhileLoggedOut = await cartPage.stableTotal();
   expect(totalWhileLoggedOut).toBe(priceA);
+  const cookieBeforeLogin = await userCookieValue(page);
+  expect(cookieBeforeLogin).toBeTruthy();
 
   // Step 3: log in with an existing account.
   await homePage.goto();
   await homePage.logIn(freshAccount.username, freshAccount.password);
 
+  // The identity cookie that keyed the anonymous cart is unchanged by
+  // logging in (WEB-010) — login only adds a separate `tokenp_` cookie
+  // alongside it, it does not rotate `user`. Asserted here, not just
+  // observed while debugging, so a reader of this test's failure output
+  // sees the mechanism WEB-010 claims rather than having to take it on
+  // trust.
+  const cookieAfterLogin = await userCookieValue(page);
+  expect(cookieAfterLogin).toBe(cookieBeforeLogin);
+
   // Step 4: open the cart again.
   // Expected result: the cart still contains the item added while logged
-  // out; logging in does not lose it.
+  // out; logging in does not lose it. WEB-010: it does not — the cart view
+  // comes back empty despite the identity cookie above being unchanged.
   await cartPage.open();
   await cartPage.waitForItem(PRODUCT_A);
   expect(await cartPage.itemCount()).toBe(1);

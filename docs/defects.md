@@ -17,12 +17,16 @@ documented behaviour.
   inspection rather than by an executed HTTP request against a running instance. The `@api`
   suite (a later ticket) exercises them live; each entry's repro steps are written as the HTTP
   request that suite will send.
-- The eight `WEB-` entries were identified during design, by reading `SPEC.md`'s "Defects
+- `WEB-001` through `WEB-008` were identified during design, by reading `SPEC.md`'s "Defects
   identified during design" section and reasoning about demoblaze's documented/expected
   behaviour. They are **design-time assertions, not yet reproduced against the live site** by
   this register — demoblaze is third-party infrastructure this ticket does not drive a browser
   against. The `@e2e` suite (a later ticket) is what actually reproduces them; each entry's repro
   steps are written as the manual steps that suite will automate.
+- `WEB-009` and `WEB-010` were **not** identified during design; they were found once the `@e2e`
+  suite actually drove a browser against the live site (issues #10 and #9 respectively), and
+  each was **reproduced live** by the test named in its Verification line. Their repro steps
+  describe what that test actually did, not a manual procedure still to be automated.
 
 ## `api-main`
 
@@ -205,8 +209,10 @@ documented behaviour.
 ### WEB-009 — Checkout accepts an order placed from an empty cart
 
 - **Severity:** Medium
-- **Verification:** reproduced against the live site (`@e2e` `TC-02`,
-  `tests/e2e/checkout-validation.spec.ts`), 2026-09-07.
+- **Verification:** reproduced live by the `@e2e` suite (`tests/e2e/checkout-validation.spec.ts`,
+  `TC-02`) on 2026-09-07, three consecutive runs. Not identified during design — found while
+  implementing issue #10, when the live site's actual behaviour did not match `TC-02`'s
+  design-time assumption that demoblaze enforces a non-empty cart.
 - **Steps to reproduce:** log in with a fresh account (cart guaranteed
   empty), navigate directly to `/cart.html`, click "Place Order" with no
   items in the cart, fill the order form with valid-looking values, submit.
@@ -219,16 +225,15 @@ documented behaviour.
   empty cart is accepted: a confirmation dialog appears with a generated
   order id and an amount of `0`. Reproduced three times in a row against
   the live site, including with `itemCount()` confirmed at `0` beforehand.
-- Demonstrated by `TC-02` in `docs/test-cases.md`. Unlike `WEB-001` through
-  `WEB-008`, this entry was not identified during design; it was found
-  while implementing issue #10, when the live site's actual behaviour did
-  not match `TC-02`'s design-time assumption that demoblaze enforces a
-  non-empty cart.
+- Demonstrated by `TC-02` in `docs/test-cases.md`.
 
 ### WEB-010 — Cart added while logged out is not visible after logging in
 
 - **Severity:** Medium
-- **Verification:** reproduced live by the `@e2e` suite (`tests/e2e/cart.spec.ts`, TC-08).
+- **Verification:** reproduced live by the `@e2e` suite (`tests/e2e/cart.spec.ts`, `TC-08`). Not
+  identified during design — found while implementing issue #9, when the live site's actual
+  behaviour did not match `TC-08`'s design-time assumption that a cart built while logged out
+  survives logging in.
 - **Steps to reproduce:** while logged out, add a product to the cart (observe the `addtocart`
   request keyed by the anonymous `user` cookie), open the cart to confirm the item is there, then
   log in with an existing account and open the cart again.
@@ -240,7 +245,4 @@ documented behaviour.
   identity), but the post-login cart view does not surface it, so from the shopper's perspective
   the cart is emptied by logging in. This is the same class of identity-key mismatch as WEB-005
   (add and later lookups keyed inconsistently) but triggered by login rather than purchase.
-- Demonstrated by `TC-08` in `docs/test-cases.md`. Unlike `WEB-001` through `WEB-008`, this entry
-  was not identified during design; it was found while implementing issue #9, when the live
-  site's actual behaviour did not match `TC-08`'s design-time assumption that a cart built while
-  logged out survives logging in.
+- Demonstrated by `TC-08` in `docs/test-cases.md`.
