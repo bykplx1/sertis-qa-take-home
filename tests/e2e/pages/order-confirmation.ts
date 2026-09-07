@@ -25,6 +25,24 @@ export class OrderConfirmation {
     await expect(this.root).toBeVisible({ timeout });
   }
 
+  /**
+   * Asserts a confirmation never appears within `timeout` — the oracle for
+   * an order that should have been rejected (issue #10 / SPEC.md
+   * "Oracles"). Waits out the full timeout rather than checking once, so a
+   * confirmation that appears late is still caught; only a genuine timeout
+   * (the dialog never showing) counts as success.
+   */
+  async assertDoesNotAppear(timeout = 5_000): Promise<void> {
+    await this.root.waitFor({ state: 'visible', timeout }).then(
+      () => {
+        throw new Error('Order confirmation appeared, but the order was expected to be rejected.');
+      },
+      () => {
+        // Expected: waitFor timed out because the confirmation never appeared.
+      },
+    );
+  }
+
   async details(): Promise<OrderConfirmationDetails> {
     const text = ((await this.root.locator('p.lead').textContent()) ?? '').replace(/\s+/g, ' ');
     const idMatch = text.match(/Id:\s*(\d+)/);
