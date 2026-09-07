@@ -46,19 +46,31 @@ jobs:
 
       # Chromium only, per issue #11 - the e2e-firefox/e2e-webkit projects
       # and the k6 performance script are never invoked in the pipeline.
-      # continue-on-error: this step's exit code is intentionally not the
-      # job's outcome - see the header comment on why nothing here gates
-      # anything. Failures are still fully reported below.
+      #
+      # This step exits 0 unconditionally (it records the test process's
+      # real exit code in `run_tests_exit_code` first) so the job's outcome
+      # is never gated on the suite going red - see the header comment.
+      # `continue-on-error` stays on as a backstop for the case the shell
+      # itself doesn't reach the `exit 0` line (e.g. the runner kills the
+      # step). Either way, the real exit code is passed to the summarizer
+      # below so a broken run is never silently reported as clean - see
+      # .github/scripts/summarize-failures.js's "BROKEN RUN" handling.
       - name: Run @e2e suite against demoblaze
         id: run_tests
         continue-on-error: true
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-results.json
-        run: npx playwright test --project=e2e --reporter=html,json
+        run: |
+          set +e
+          npx playwright test --project=e2e --reporter=html,json
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Summarize failures (by defect id)
         if: always()
-        run: node .github/scripts/summarize-failures.js e2e-results.json "@e2e (demoblaze)"
+        run: |
+          node .github/scripts/summarize-failures.js e2e-results.json "@e2e (demoblaze)" "${{ steps.run_tests.outputs.exit_code }}"
 
       - name: Upload HTML report and traces
         if: always()
@@ -107,17 +119,26 @@ jobs:
       # satisfies issue #11's "the api job starts the local api-main before
       # running" without a separate step.
       #
-      # continue-on-error: see the e2e job's identical comment above.
+      # See the e2e job's identical comment above: this always exits 0 after
+      # capturing the real exit code, so the job's outcome is never gated on
+      # the suite going red, but the real code still reaches the summarizer
+      # so a broken run can't render as a false pass.
       - name: Run @api suite (starts local api-main automatically)
         id: run_tests
         continue-on-error: true
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: api-results.json
-        run: npx playwright test --project=api --reporter=html,json
+        run: |
+          set +e
+          npx playwright test --project=api --reporter=html,json
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Summarize failures (by defect id)
         if: always()
-        run: node .github/scripts/summarize-failures.js api-results.json "@api (api-main)"
+        run: |
+          node .github/scripts/summarize-failures.js api-results.json "@api (api-main)" "${{ steps.run_tests.outputs.exit_code }}"
 
       - name: Upload HTML report and traces
         if: always()
