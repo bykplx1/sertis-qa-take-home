@@ -1,0 +1,132 @@
+name: CI
+
+# Runs both suites and attaches evidence of the run to every pull request.
+# Reporting only: neither job's outcome gates anything. There is
+# deliberately no branch-protection or required-check configuration here or
+# anywhere else in the repo - see SPEC.md "Pipeline" and issue #11. A red
+# result is meant to inform a reviewer, not freeze this repository over
+# defects that live in products it does not own (api-main, demoblaze).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel a superseded run on the same PR/branch rather than piling up runs
+# against third-party infrastructure (demoblaze) and api-main.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  e2e:
+    name: e2e (demoblaze)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Chromium only, per issue #11 - the e2e-firefox/e2e-webkit projects
+      # and the k6 performance script are never invoked in the pipeline.
+      # continue-on-error: this step's exit code is intentionally not the
+      # job's outcome - see the header comment on why nothing here gates
+      # anything. Failures are still fully reported below.
+      - name: Run @e2e suite against demoblaze
+        id: run_tests
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-results.json
+        run: npx playwright test --project=e2e --reporter=html,json
+
+      - name: Summarize failures (by defect id)
+        if: always()
+        run: node .github/scripts/summarize-failures.js e2e-results.json "@e2e (demoblaze)"
+
+      - name: Upload HTML report and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-e2e
+          path: |
+            playwright-report/
+            test-results/
+            e2e-results.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  api:
+    name: api (api-main)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      # api-main is a read-only system under test (never modified - see
+      # CLAUDE.md); this only installs its own node_modules, mirroring
+      # package.json's "pretest" hook, which npm only runs ahead of the
+      # exact script name "test" and therefore does not fire for the
+      # `--project=api` invocation used below.
+      - name: Install api-main dependencies
+        working-directory: api-main
+        run: npm install --no-save --no-audit --no-fund
+
+      # No browser install here: the @api project drives Playwright's HTTP
+      # request context only, never a browser.
+      #
+      # api-main is started automatically by playwright.config.ts's
+      # webServer (command: "node server.js", cwd: api-main) because
+      # API_BASE_URL is left unset here, so usingLocalApi is true - this
+      # satisfies issue #11's "the api job starts the local api-main before
+      # running" without a separate step.
+      #
+      # continue-on-error: see the e2e job's identical comment above.
+      - name: Run @api suite (starts local api-main automatically)
+        id: run_tests
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: api-results.json
+        run: npx playwright test --project=api --reporter=html,json
+
+      - name: Summarize failures (by defect id)
+        if: always()
+        run: node .github/scripts/summarize-failures.js api-results.json "@api (api-main)"
+
+      - name: Upload HTML report and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-api
+          path: |
+            playwright-report/
+            test-results/
+            api-results.json
+          retention-days: 14
+          if-no-files-found: warn
