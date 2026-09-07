@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # The pagination oracle: what demoblaze's Previous/Next controls should do
@@ -63,5 +63,5 @@ remaining in the DOM while hidden — a real finding, but for the accessibility 
   about `.github/scripts/summarize-failures.js` concrete.
 - The partition principle is stated without constants deliberately, so it is reusable as the
   assertion shape for later listing work.
-- Two terms this argument leans on — *result set* and *page window* — are not in `CONTEXT.md`.
-  They are worth adding if this ADR is accepted; the glossary is deliberately untouched until then.
+- Two terms this argument leans on — **result set** and **page window** — are added to
+  `CONTEXT.md` on acceptance, since the partition principle cannot be stated without them.
