@@ -17,9 +17,14 @@ those defects are listed in `SPEC.md`'s "Defects identified during design" secti
 register is being built in a parallel ticket; if its numbering lands differently, these two ids
 should be updated to match rather than the register renumbered to match this document.
 
-A third case, `TC-08`, was written from intended behaviour at design time and only found to fail
-once the `@e2e` cart-behaviour suite (issue #9) actually drove a browser against the live site;
-it carries `WEB-010`, added to the register after the fact rather than assumed up front.
+Two further cases, `TC-02` and `TC-08`, were written from intended behaviour at design time and
+only found to fail once the `@e2e` suite actually drove a browser against the live site — neither
+demoblaze defect was anticipated when this document was first written. `TC-02` carries `WEB-009`
+(found implementing the checkout-validation suite, issue #10) and `TC-08` carries `WEB-010`
+(found implementing the cart-behaviour suite, issue #9); both ids were added to the register
+after the fact rather than assumed up front, the same way `TC-05` and `TC-06` assumed `WEB-001`
+and `WEB-002` up front. Four cases below are therefore expected to fail by design in total:
+`TC-02`, `TC-05`, `TC-06`, and `TC-08`.
 
 ## TC-01 — Happy path: sign up, add to cart, place an order, see confirmation
 
@@ -45,7 +50,7 @@ equal to the sum of the products added to the cart. The order id's value itself 
 significant (it is generated client-side and is not asserted precisely, only that it is
 present and shaped like an id). Returning to the cart afterwards shows it empty.
 
-## TC-02 — Ordering with an empty cart is prevented
+## TC-02 — Ordering with an empty cart is prevented — `WEB-009`
 
 **Preconditions:** logged in with a valid account. The cart contains no items.
 
@@ -56,6 +61,14 @@ present and shaped like an id). Returning to the cart afterwards shows it empty.
 
 **Expected result:** the shopper cannot complete an order from an empty cart — either the
 order action is unavailable, or submitting it is rejected and no order confirmation appears.
+
+**Known to fail:** the "Place Order" button and order modal are available regardless of cart
+contents. Submitting the order form against a cart confirmed empty (`itemCount()` is `0`) is
+accepted: a confirmation dialog appears showing a generated order id and an amount of `0`,
+reproduced repeatedly against the live site. This case was written from intended behaviour at
+design time; the defect was only found live while implementing the `@e2e` checkout-validation
+suite (issue #10), not anticipated up front the way `TC-05` and `TC-06` were. It fails by
+design, demonstrating `WEB-009`.
 
 ## TC-03 — Ordering with a blank name is prevented
 
