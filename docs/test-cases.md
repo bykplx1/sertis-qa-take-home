@@ -9,13 +9,17 @@ Terms follow `CONTEXT.md`: **journey** is one complete path from landing to orde
 **e2e** is a test that drives demoblaze through a browser, **defect** is a numbered discrepancy
 recorded in `docs/defects.md`.
 
-A case expected to fail carries the `WEB-` defect id it demonstrates. Two cases below are
-expected to fail because demoblaze performs no such validation: `TC-05` and `TC-06`. Their
-defect ids assume `docs/defects.md` numbers demoblaze's card-and-expiry defects `WEB-001` (any
-card value accepted) and `WEB-002` (impossible expiry accepted), in the order those defects are
-listed in `SPEC.md`'s "Defects identified during design" section — the register is being built
-in a parallel ticket; if its numbering lands differently, these two ids should be updated to
-match rather than the register renumbered to match this document.
+A case expected to fail carries the `WEB-` defect id it demonstrates. Two cases below were known
+at design time to be expected to fail because demoblaze performs no such validation: `TC-05` and
+`TC-06`. Their defect ids assume `docs/defects.md` numbers demoblaze's card-and-expiry defects
+`WEB-001` (any card value accepted) and `WEB-002` (impossible expiry accepted), in the order
+those defects are listed in `SPEC.md`'s "Defects identified during design" section — the
+register is being built in a parallel ticket; if its numbering lands differently, these two ids
+should be updated to match rather than the register renumbered to match this document.
+
+A third case, `TC-08`, was written from intended behaviour at design time and only found to fail
+once the `@e2e` cart-behaviour suite (issue #9) actually drove a browser against the live site;
+it carries `WEB-010`, added to the register after the fact rather than assumed up front.
 
 ## TC-01 — Happy path: sign up, add to cart, place an order, see confirmation
 
@@ -132,7 +136,7 @@ known prices.
 **Expected result:** the stabilised total equals the sum of the prices of the items still in
 the cart.
 
-## TC-08 — Adding to cart while logged out, then logging in, preserves the cart
+## TC-08 — Adding to cart while logged out, then logging in, preserves the cart — `WEB-010`
 
 **Preconditions:** not logged in. An existing account is available to log into during the
 journey.
@@ -146,3 +150,9 @@ journey.
 
 **Expected result:** the cart still contains the items added while logged out; logging in does
 not lose them.
+
+**Known to fail:** demoblaze keys the anonymous cart by a `user` cookie set on landing. That
+cookie's value is unchanged by logging in (login only adds a separate `tokenp_` cookie), yet the
+cart shown after logging in is empty — the post-login cart lookup does not surface items stored
+under the pre-login identity. This case is written from intended behaviour and fails by design,
+demonstrating `WEB-010`.
