@@ -14,6 +14,33 @@ const API_BASE_URL = process.env.API_BASE_URL ?? DEFAULT_API_BASE_URL;
 // API_BASE_URL (e.g. a deployed instance).
 const usingLocalApi = API_BASE_URL === DEFAULT_API_BASE_URL;
 
+/**
+ * Playwright's `webServer` is a top-level config field: it starts
+ * unconditionally, before Playwright has decided which projects `--project`
+ * selected. That decoupling is exactly the bug this fixes — an `@e2e`-only
+ * run (no `--project=api`) must not pay for, or depend on, api-main's
+ * dependencies being installed.
+ *
+ * There's no per-project `webServer` hook to lean on instead, so the run's
+ * own CLI invocation is inspected for `--project` selectors. When none are
+ * given, every project (including api) runs, so the server is still needed.
+ */
+function isApiProjectRequested(argv: string[]): boolean {
+  const selected: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--project') {
+      const value = argv[i + 1];
+      if (value) selected.push(value);
+    } else if (arg.startsWith('--project=')) {
+      selected.push(arg.slice('--project='.length));
+    }
+  }
+  return selected.length === 0 || selected.includes('api');
+}
+
+const shouldStartLocalApi = usingLocalApi && isApiProjectRequested(process.argv);
+
 const E2E_BASE_URL = process.env.E2E_BASE_URL ?? 'https://www.demoblaze.com';
 
 export default defineConfig({
@@ -27,10 +54,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
 
-  // Starts a local api-main for the @api project. Skipped when API_BASE_URL
-  // points somewhere else (e.g. a deployed instance), and api-main/ is
-  // never imported in-process — only spawned as a separate process.
-  webServer: usingLocalApi
+  // Starts a local api-main, but only when the @api project is actually
+  // part of this run. Skipped when API_BASE_URL points somewhere else (e.g.
+  // a deployed instance), and api-main/ is never imported in-process — only
+  // spawned as a separate process.
+  webServer: shouldStartLocalApi
     ? {
         // api-main reads ./swagger.yaml relative to its own cwd, so it must
         // be launched from within api-main/ rather than the repo root.
