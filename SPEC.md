@@ -80,7 +80,8 @@ Tests assert intended behaviour rather than observed behaviour. Where a system v
 58. As a team member, I want the pipeline to report failures without blocking merges, so that a red result informs rather than freezes the repository.
 59. As a team member, I want failures summarised in the pipeline output, so that I can see what broke without downloading artifacts.
 60. As a team member, I want reports and traces retained as artifacts, so that I can investigate after the run has finished.
-61. As a team member, I want the performance test kept out of the pipeline, so that runs stay fast and we do not put a public demo site under load on a schedule.
+61. As a team member, I want the performance test kept out of every automatic pipeline trigger, so that CI runs stay fast and we do not put a public demo site under load on a schedule.
+61a. As a team member, I want to be able to dispatch the performance run manually from the pipeline and have its verdict and artifacts retained there, so that a result is something I can link to rather than something that only ever existed on one laptop.
 62. As a newcomer, I want a short glossary of the terms this repo uses, so that the same word means the same thing in every document.
 
 ## Implementation Decisions
@@ -114,6 +115,8 @@ Tests assert intended behaviour rather than observed behaviour. Where a system v
 **Browser matrix.** Chromium in the pipeline. Firefox and WebKit configured and runnable locally. Cross-browser coverage appears in the test plan as a separately estimated task.
 
 **Pipeline.** GitHub Actions. Two jobs, `e2e` and `api`, both non-blocking, triggered on pull request and on push to `main`. The api job starts the local server before running. Both jobs upload their report and traces, and write a failure summary listing defect ids. Nothing gates the merge: this is a QA repository, the defects live in products it does not own, and evidence of a passing run is attached to the pull request rather than enforced by a gate.
+
+**Performance execution.** The k6 script is runnable two ways, and neither is automatic. Locally by hand (`npm run perf:load`, `npm run perf:smoke`), and in the pipeline via a `workflow_dispatch`-only workflow (`.github/workflows/perf.yml`) that takes the profile as an input, renders the threshold verdict into the run summary, and retains `perf-summary.json` plus the console log as artifacts for 90 days. The reasoning that kept performance out of CI is unchanged and still holds — a public demo site this repo does not own should not be put under load on a schedule — and the manual workflow does not weaken it: there is no `push`, `pull_request` or `schedule` trigger, and a run happens only when a person starts one. What it adds is durability of evidence. A performance result whose only record is a terminal that has since been closed cannot be reviewed, compared, or trusted; one attached to a numbered run can. Threshold breaches fail that job, because the script is built to produce a verdict rather than a chart, and a manual workflow gates nothing.
 
 **Performance approach.** k6 against demoblaze, as two parallel scenarios in one script:
 
@@ -173,7 +176,7 @@ Two systems under test require two boundaries at minimum; seam 3 reuses seam 1's
 - Fixing or reporting defects to demoblaze's maintainers.
 - Cross-browser execution in the pipeline. Configured and runnable locally, costed as a task in the plan, not run automatically.
 - Executing stress, spike, soak or breakpoint performance profiles. Designed and documented only.
-- Running any performance test in the pipeline, on a schedule or otherwise.
+- Running any performance test *automatically* — on pull request, on push, or on a schedule. The k6 run is available in the pipeline on manual dispatch only (`.github/workflows/perf.yml`), so that a deliberate run's verdict is stored centrally instead of only in the terminal of whichever laptop produced it. Nothing triggers it but a person.
 - Accessibility, visual regression, mobile-device and localisation testing. Present as costed tasks in the plan; not implemented.
 - Load testing `api-main`. It belongs to a different exercise with a different scope; the performance work targets demoblaze.
 - Test-management tool integration and cross-run reporting history.

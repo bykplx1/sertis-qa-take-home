@@ -35,7 +35,7 @@ npm run report
 | --- | --- | --- |
 | [Node.js](https://nodejs.org/) + npm | Everything — the root toolchain and both test projects. | Node 22, npm 10 (repo targets Node 20 in CI, see `.github/workflows/ci.yml`). |
 | Playwright browsers | `@e2e` only (`@api` drives HTTP, not a browser). Installed by `npx playwright install --with-deps`, not by `npm ci` alone. | Installed via the command above. |
-| [k6](https://k6.io/) | `perf/` only — not part of `npm test`, not part of CI, run by hand. See `perf/README.md`. | Not required to satisfy the `npm test` command above. |
+| [k6](https://k6.io/) | `perf/` only — not part of `npm test` and never triggered automatically. Run by hand locally, or dispatched manually from Actions (*Performance (manual)*). See `perf/README.md`. | Not required to satisfy the `npm test` command above. |
 
 ## Confirm every red test is deliberate — under a minute
 
@@ -107,7 +107,7 @@ available; see below).
 | `npm run test:cross-browser` | `@e2e` on Firefox and WebKit. Not part of `npm test` or CI — see `SPEC.md`'s browser matrix decision. |
 | `npx playwright test --project=e2e --list` / `--project=api --list` | List every test in a project without running it. Verified working against a clean install. |
 | `npm run perf:smoke` | A seconds-long, single-digit-VU k6 smoke run, proving the performance script and its thresholds execute without putting the full plan-shaped load on a shared third-party site. See `perf/README.md`. |
-| `npm run perf:load` | The full plan-shaped k6 load (~9 minutes, 20 VUs) against live demoblaze. Not run in CI. |
+| `npm run perf:load` | The full plan-shaped k6 load (~9 minutes, 20 VUs) against live demoblaze. Never runs automatically; the same profile can be dispatched by hand from Actions → *Performance (manual)* when the result should be stored centrally rather than only in your terminal. |
 
 ## Configuration
 

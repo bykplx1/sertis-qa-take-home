@@ -5,3 +5,9 @@ blob-report/
 playwright/.cache/
 .env
 .env.*
+
+# k6 run output. Written into the working directory by the performance
+# script's handleSummary() on every run, local or dispatched; the pipeline
+# uploads it as an artifact rather than committing it.
+perf-summary.json
+k6-console.log

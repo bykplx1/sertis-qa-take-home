@@ -1,0 +1,159 @@
+name: Performance (manual)
+
+# The k6 performance run, on a manual trigger and nothing else.
+#
+# Why this exists: a performance run whose only record is the terminal of the
+# laptop that ran it is not evidence. This workflow runs the same script the
+# same way on a clean runner and leaves the verdict behind — rendered into the
+# run summary and attached as artifacts — so a result can be pointed at rather
+# than described.
+#
+# Why `workflow_dispatch` and nothing else: demoblaze is third-party
+# infrastructure this repo does not own. `docs/performance-plan.md` §6 argues
+# at length that a public demo site should not be put under load on a
+# schedule, and that reasoning is unchanged — what changed is only that a
+# deliberate, human-initiated run now has somewhere to store its result. There
+# is no `push`, no `pull_request` and no `schedule` trigger here, and adding
+# one would contradict SPEC.md, Out of Scope.
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Load profile: smoke (~30s, 1-2 VUs) or full (~9m, 20 VUs, the plan-shaped load)'
+        type: choice
+        required: true
+        default: smoke
+        options:
+          - smoke
+          - full
+      reason:
+        description: 'Why this run? (recorded in the run summary so a stored result explains itself)'
+        type: string
+        required: false
+        default: ''
+
+# One performance run at a time, and never cancel one in flight: unlike the
+# CI suites, a superseded run here has already put load on a third-party site,
+# and killing it mid-flight can leave carts behind that the script's own
+# cleanup would otherwise have deleted.
+concurrency:
+  group: perf-${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  k6:
+    name: k6 against demoblaze (${{ inputs.profile }})
+    runs-on: ubuntu-latest
+    # The full profile is ~9 minutes of load plus install and ramp-down; the
+    # ceiling is generous enough to absorb a slow start without being generous
+    # enough to sit on demoblaze for an hour if something hangs.
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Record the run's intent
+        run: |
+          {
+            echo "## Run parameters"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Profile | \`${{ inputs.profile }}\` |"
+            echo "| Triggered by | @${{ github.actor }} |"
+            echo "| Ref | \`${{ github.ref_name }}\` (\`${{ github.sha }}\`) |"
+            echo "| Reason | ${{ inputs.reason != '' && inputs.reason || '_(none given)_' }} |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Installed from Grafana's own apt repository rather than a marketplace
+      # action, so the provenance of the binary under which every published
+      # number was produced is the vendor's.
+      - name: Install k6
+        run: |
+          sudo gpg --no-default-keyring \
+            --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 \
+            --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+          k6 version
+
+      # The `webVitals` scenario drives real Chromium via k6/browser
+      # (docs/performance-plan.md §5). ubuntu-latest ships Google Chrome, so
+      # point k6 at it explicitly rather than relying on auto-detection, and
+      # fail loudly here if it is absent — an LCP threshold that silently
+      # never evaluates would render as a clean run.
+      - name: Locate a browser for the web-vitals scenario
+        run: |
+          set -e
+          browser_path="$(command -v google-chrome || command -v chromium-browser || command -v chromium || true)"
+          if [ -z "$browser_path" ]; then
+            echo "::error::No Chrome/Chromium on the runner; the webVitals scenario cannot run and browser_web_vital_lcp would never evaluate."
+            exit 1
+          fi
+          echo "Using browser at $browser_path"
+          echo "K6_BROWSER_EXECUTABLE_PATH=$browser_path" >> "$GITHUB_ENV"
+
+      # Mirrors the e2e job in ci.yml: capture k6's real exit code, then exit 0
+      # so the summarizer below always runs and always uploads its evidence. k6
+      # exits non-zero on a threshold breach, and a breach is a *result* — the
+      # job's own verdict is decided in the final step, from the summary file,
+      # not from this step's status.
+      - name: Run k6
+        id: run_k6
+        continue-on-error: true
+        env:
+          K6_BROWSER_HEADLESS: 'true'
+          PERF_PROFILE: ${{ inputs.profile }}
+        run: |
+          set +e
+          k6 run perf/demoblaze-load.js 2>&1 | tee k6-console.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Summarize the run
+        if: always()
+        run: |
+          node .github/scripts/summarize-perf.js perf-summary.json "${{ inputs.profile }}" "${{ steps.run_k6.outputs.exit_code }}"
+
+      # Retained far longer than the CI suites' 14 days: these runs are
+      # deliberate and infrequent, and their value is precisely that a result
+      # from weeks ago can still be produced on request.
+      - name: Upload k6 summary and console log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results-${{ inputs.profile }}-${{ github.run_number }}
+          path: |
+            perf-summary.json
+            k6-console.log
+          retention-days: 90
+          if-no-files-found: warn
+
+      # The verdict. A threshold breach fails this job, because the script is
+      # designed to produce a verdict rather than a chart (perf/README.md) and
+      # a red manual run is the honest rendering of a breached threshold. This
+      # gates nothing: the workflow is manual-only, runs on no pull request,
+      # and no branch protection references it (SPEC.md, Out of Scope — "Any
+      # merge-gating or branch-protection configuration").
+      - name: Fail the job if k6 did
+        if: always()
+        run: |
+          code="${{ steps.run_k6.outputs.exit_code }}"
+          if [ -z "$code" ]; then
+            echo "::error::k6 never reported an exit code; treat this as a broken run, not a clean one."
+            exit 1
+          fi
+          if [ "$code" != "0" ]; then
+            echo "::error::k6 exited $code - see the run summary above for whether this is a threshold breach or a broken run."
+            exit "$code"
+          fi
+          echo "k6 exited 0: every threshold held."
