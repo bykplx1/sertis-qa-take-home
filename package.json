@@ -1,0 +1,19 @@
+{
+  "name": "sertis-qa-take-home",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright harness for the Sertis QA take-home: @e2e coverage of demoblaze and @api coverage of api-main.",
+  "scripts": {
+    "pretest": "cd api-main && npm install --no-save --no-audit --no-fund",
+    "test": "playwright test --project=e2e --project=api",
+    "test:e2e": "playwright test --project=e2e",
+    "test:api": "playwright test --project=api",
+    "test:cross-browser": "playwright test --project=e2e-firefox --project=e2e-webkit",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}
