@@ -1,0 +1,190 @@
+openapi: 3.0.3
+info:
+  title: Sertis QA API
+  description: |-
+    Sertis's QA Simple API Server for API Testing
+    
+  contact:
+    email: nroon@sertiscorp.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
+externalDocs:
+  description: Find out more about Sertis
+  url: https://www.sertiscorp.com/
+servers:
+  - url: https://sertis-qa.glitch.me/
+tags:
+  - name: user
+    description: Operations about user
+paths:
+  /user/ids:
+    get:
+      tags:
+        - user
+      summary: Get user ids
+      description: Get all available user ids in the system
+      responses:
+        '200':
+          description: A JSON object contains all available user ids
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["01", "02", "03"]
+        '5XX':
+          description: Unexpected error
+          
+  /user/{id}:
+    get:
+      tags:
+        - user
+      summary: Get a user by ID
+      description: Get all available user ids in the system
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID of the user to get
+      responses:
+        '200':
+          description: A JSON object of a particular user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  first_name:
+                    type: string
+                  last_name:
+                    type: string
+                  permission:
+                    type: string  
+                  phone_no:
+                    type: string
+                  otp:
+                    type: string
+                example:
+                  first_name: John
+                  last_name: Doe
+                  permission: admin
+                  phone_no: "020011893"
+                  otp: "123456"
+
+        '400':
+          description: Invalid user id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status_code:
+                    type: string
+                  message:
+                    type: string
+                example:
+                  status_code: "400"
+                  message: "123 is not a valid id"
+        '5XX':
+          description: Unexpected error
+          
+  /signin:
+    post:
+      tags:
+        - user
+      summary: Sign in user
+      description: Sign user into the system
+      requestBody:
+        description: User object
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone_no:
+                  type: string
+                otp:
+                  type: string
+              example:
+                phone_no: "020011893"
+                otp: "012345"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status_code:
+                    type: string
+                  status:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      first_name:
+                        type: string
+                      last_name:
+                        type: string
+                      permission:
+                        type: string
+                  message:
+                    type: string
+                example:
+                  status_code: "200"
+                  status: "Pass"
+                  data:
+                    id:  "01"
+                    first_name: QA
+                    last_name: Sertis
+                    permission: admin
+                  message: "Sign in success"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status_code:
+                    type: string
+                  status:
+                    type: string
+                  data:
+                    type: object
+                  message:
+                    type: string
+                example:
+                  status_code: "404"
+                  status: "Not found"
+                  data: {}
+                  message: "Sign in success"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status_code:
+                    type: string
+                  status:
+                    type: string
+                  data:
+                    type: object
+                  message:
+                    type: string
+                example:
+                  status_code: "500"
+                  status: "Fail"
+                  data: {}
+                  message: "Internal Server Error"
+  

@@ -1,0 +1,18 @@
+{
+	"main": "server.js",
+	"scripts": {
+		"start": "node server.js"
+	},
+	"preinstall": "rm package-lock.json",
+	"dependencies": {
+		"cors": "^2.8.5",
+		"express": "^4.15.3",
+		"body-parser": "^1.17.2",
+		"swagger-ui-express": "^5.0.0",
+		"yaml": "^2.3.3"
+	},
+	"engines": {
+		"node": "14.x"
+	},
+	"license": "MIT"
+}
