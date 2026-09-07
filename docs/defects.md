@@ -90,18 +90,25 @@ documented behaviour.
 
 - **Severity:** Low
 - **Verification:** static source inspection
-- **Spec reference:** `api-main/swagger.yaml:166-169`, the `404` response example for `/signin`.
+- **Spec reference:** `api-main/swagger.yaml:166-169`, the `404` response example for `/signin`,
+  and the identical block in the API Documentation appendix of the original brief
+  (`QA Take-Home-Test.docx.pdf`, repo root).
 - **Location:** `api-main/swagger.yaml:169` — `message: "Sign in success"` under the `404`
   example, versus the actual message the server emits for that case at `api-main/server.js:89`
-  — `"message": "User not found"`.
+  — `"message": "User not found"`. The same line appears in the brief's appendix. Stripped of
+  indentation, the two documents differ only in `info.description` and one space inside an
+  example value, so this is a defect in the specification as issued, not a transcription slip in
+  the copy shipped with the server.
 - **Steps to reproduce:** read the `404` response example in `/signin`'s swagger documentation (or
   visit the served Swagger UI at the server's root) and compare its `message` field against the
-  message the server actually returns for a non-matching credential pair.
+  message the server actually returns for a non-matching credential pair. The same example in the
+  brief's appendix can be compared the same way, without running the server.
 - **Expected behaviour:** the documentation's `404` example message describes a not-found
   outcome, consistent with its own `status: "Not found"` field on the same example.
 - **Actual behaviour:** the example's `message` field reads `"Sign in success"`, contradicting
   its own `status` field and the server's real `404` message (`"User not found"`). This is a
-  defect in the documentation itself, not the server's runtime behaviour.
+  defect in the documentation itself, not the server's runtime behaviour, and it reaches the
+  candidate through both copies of that documentation.
 
 ## demoblaze
 
