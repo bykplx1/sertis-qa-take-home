@@ -2,7 +2,9 @@
 
 Implements the workload model documented in `docs/performance-plan.md` against
 demoblaze. That document is the spec; this directory is the implementation.
-Not wired into the CI pipeline (SPEC.md, Out of Scope) — run by hand.
+Never runs automatically — no push, pull request or schedule triggers it
+(SPEC.md, Out of Scope). Run it by hand locally, or dispatch it manually in
+the pipeline (see "Run it in CI" below).
 
 ## Requirements
 
@@ -28,6 +30,34 @@ shared third-party site:
 npm run perf:smoke
 # = k6 run -e PERF_PROFILE=smoke perf/demoblaze-load.js
 ```
+
+## Run it in CI
+
+`.github/workflows/perf.yml`, triggered by **manual dispatch only**: Actions →
+*Performance (manual)* → *Run workflow*, choosing the `smoke` or `full`
+profile and optionally recording why the run was made.
+
+This exists because a performance result that lives only in a local terminal
+is not evidence. A dispatched run executes the same script on a clean Ubuntu
+runner and leaves the verdict behind:
+
+- the threshold table and key metrics rendered straight into the run summary,
+  by `.github/scripts/summarize-perf.js` — readable without downloading
+  anything;
+- `perf-summary.json` and the full console log attached as artifacts, retained
+  **90 days** (longer than the CI suites' 14, because these runs are
+  deliberate and infrequent and their value is that an old result can still be
+  produced on request).
+
+A breached threshold fails that job. That is intended: the script produces a
+verdict, and a red manual run is the honest rendering of a breach. It gates
+nothing — the workflow runs on no pull request and no branch protection
+references it.
+
+The reasoning that keeps performance out of automatic CI is untouched: a
+public demo site this repo does not own should not be put under load on a
+schedule (`docs/performance-plan.md` §6). A human still decides every run;
+what changed is only where the result is kept.
 
 ## What it does
 
@@ -58,7 +88,15 @@ did not purchase) — nothing is left behind in the shared demo instance.
 | `browser_web_vital_lcp` p75 | < 2500ms |
 
 A run that breaches any of these fails — that is the intended behaviour, not
-a bug: the script is designed to produce a verdict, not a chart.
+a bug: the script is designed to produce a verdict, not a chart. k6 exits `99`
+on a breach.
+
+Every run, local or dispatched, writes **`perf-summary.json`** into the working
+directory via the script's `handleSummary()`, alongside the usual terminal
+summary. `summaryTrendStats` is set explicitly so that p(75) — the percentile
+the LCP threshold is set on — appears in that file; k6's default trend stats
+omit it, which would leave the LCP threshold reporting "held" without ever
+showing the number it held at.
 
 ## Discrepancy between the plan and issue #13, reported rather than resolved
 

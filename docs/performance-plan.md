@@ -195,8 +195,13 @@ halves from one run.
 
 Four additional load profiles are documented here for the team's future use. **None of them are
 run in this engagement** — see `SPEC.md`, Out of Scope, and the pipeline decision that keeps
-performance testing out of CI entirely (SPEC.md, Implementation Decisions — Pipeline; a public
-demo site should not be put under any of these on a schedule).
+performance testing off every automatic CI trigger (SPEC.md, Implementation Decisions —
+Performance execution; a public demo site should not be put under any of these on a schedule).
+
+That decision is about *automatic* execution, and the profiles in this table stay unrun under
+either route. The load profile in §3 can be dispatched manually in the pipeline
+(`.github/workflows/perf.yml`) so its verdict is retained centrally rather than only locally, but
+nothing schedules it and no profile below is wired to any trigger at all.
 
 | Profile | Purpose | Why not run here |
 |---|---|---|

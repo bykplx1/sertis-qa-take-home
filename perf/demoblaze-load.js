@@ -38,9 +38,12 @@
  *   k6 run perf/demoblaze-load.js
  *
  * This runs the full ~9-minute plan-shaped load against the live demoblaze
- * site. It is deliberately NOT wired into the CI pipeline (SPEC.md, Out of
- * Scope — "Running any performance test in the pipeline, on a schedule or
- * otherwise") and must be run by hand.
+ * site. It never runs automatically: no pull request, push or schedule
+ * triggers it (SPEC.md, Out of Scope — "Running any performance test in the
+ * pipeline automatically"). It runs either by hand, as above, or by a
+ * deliberate manual dispatch of .github/workflows/perf.yml, which exists so a
+ * run's verdict is stored centrally rather than only on the laptop that
+ * happened to run it.
  *
  * A heavily shortened smoke configuration exists for verifying the script
  * itself executes and its thresholds evaluate, without putting real load on
@@ -57,6 +60,10 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { browser } from 'k6/browser';
+// Renders the same end-of-test summary k6 prints by default, which defining
+// handleSummary() below otherwise suppresses. See handleSummary at the foot
+// of this file.
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.4/index.js';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -124,6 +131,12 @@ const PROFILES = {
 const cfg = PROFILES[PROFILE];
 
 export const options = {
+  // k6's default trend stats are avg/min/med/max/p(90)/p(95) — which omits
+  // p(75), the exact percentile performance-plan.md §4 sets the LCP threshold
+  // on. The threshold still evaluates without this, but neither the summary
+  // nor perf-summary.json would show the number it evaluated, so a reader
+  // could see "held" and not what it held at. Added explicitly.
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(75)', 'p(90)', 'p(95)'],
   scenarios: {
     funnel: {
       executor: 'ramping-vus',
@@ -362,4 +375,25 @@ export async function webVitalsScenario() {
   } finally {
     await page.close();
   }
+}
+
+// ---------------------------------------------------------------------------
+// handleSummary — emit the run's verdict as a file as well as to the terminal.
+//
+// A local run prints its summary and it scrolls away; a pipeline run has to
+// leave something behind that outlives the runner. Defining handleSummary
+// suppresses k6's own end-of-test summary, so the terminal output is
+// reproduced explicitly via textSummary and the same data is written to
+// `perf-summary.json` for .github/scripts/summarize-perf.js to render and for
+// the workflow to upload as an artifact.
+//
+// This runs identically locally and in CI: `npm run perf:smoke` leaves a
+// perf-summary.json in the working directory too.
+// ---------------------------------------------------------------------------
+
+export function handleSummary(data) {
+  return {
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    'perf-summary.json': JSON.stringify(data, null, 2),
+  };
 }
