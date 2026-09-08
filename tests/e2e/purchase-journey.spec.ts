@@ -1,19 +1,5 @@
+import { CATEGORY, PRODUCT_NAME, VALID_ORDER_DETAILS } from './support/test-data';
 import { test, expect } from './fixtures';
-
-// The product used throughout this journey. Picked because it is a
-// single, unambiguous product name under "Phones" with a stable, low price
-// — nothing about the assertions below depends on which product it is.
-const CATEGORY = 'Phones' as const;
-const PRODUCT_NAME = 'Samsung galaxy s6';
-
-const VALID_ORDER_DETAILS = {
-  name: 'QA Automation',
-  country: 'Thailand',
-  city: 'Bangkok',
-  card: '4111111111111111',
-  month: '5',
-  year: '2030',
-};
 
 // TC-01 in docs/test-cases.md. Steps below map line for line to that
 // document's numbered steps (SPEC.md "E2E architecture": "the designed

@@ -190,6 +190,21 @@ export class ListingPage {
   }
 
   /**
+   * Forces a click on `Next` regardless of Playwright's actionability check
+   * (visible/enabled), so TC-10's "the last page offers no way to page
+   * further forward" has an oracle independent of `hasNextPage()` — the
+   * same boolean `collectPages()`'s own loop already used to decide it had
+   * reached this page (issue #26 E5). A regression here surfaces as a
+   * caller-side diff against the window read before the click, not as a
+   * timeout buried inside this page object.
+   */
+  async forceClickNext(): Promise<string[]> {
+    await this.nextControl.click({ force: true, timeout: 2_000 }).catch(() => {});
+    await this.page.waitForTimeout(300);
+    return this.productNames();
+  }
+
+  /**
    * Opens a product from the current listing window's card link and waits
    * for the detail page's navigation to commit before returning (issue #25
    * E9) — moved here from `HomePage`, which had no notion of the page it

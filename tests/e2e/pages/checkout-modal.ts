@@ -63,6 +63,30 @@ export class CheckoutModal {
     await this.modal.getByRole('button', { name: 'Purchase', exact: true }).click();
   }
 
+  /**
+   * Submits the order form when rejection is the expected outcome
+   * (TC-03/TC-04): demoblaze rejects an incomplete order via a native
+   * `alert()`, a different mechanism from the SweetAlert confirmation
+   * `submit()` expects on success (SPEC.md "Dialog handling"). The handler
+   * is registered before the click that can trigger it, the same
+   * before-the-triggering-action shape as `HomePage.signUp()` and
+   * `ProductPage.addToCart()` (issue #26 E6 — asserting on this message is
+   * the real oracle for rejection; without a registered handler, these
+   * tests previously passed only because Playwright auto-dismisses an
+   * unhandled dialog, which would look identical against a site that
+   * silently swallowed the submit instead). Returns the dialog's message
+   * so a caller can assert on it.
+   */
+  async submitExpectingRejection(): Promise<string> {
+    const dialogMessage = this.page.waitForEvent('dialog').then(async (dialog) => {
+      const message = dialog.message();
+      await dialog.accept();
+      return message;
+    });
+    await this.submit();
+    return dialogMessage;
+  }
+
   /** The purchase confirmation, asserted as a DOM element (see `OrderConfirmation`). */
   confirmation(): OrderConfirmation {
     return new OrderConfirmation(this.page);

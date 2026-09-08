@@ -1,13 +1,15 @@
 import { type Page } from '@playwright/test';
 import { logInAs } from './support/auth';
+import { CATEGORY, PRODUCT_NAME } from './support/test-data';
 import { test, expect } from './fixtures';
 
 // Two distinct, low-priced, unambiguous products under "Phones" — same
 // category as the purchase journey (issue #8), so this spec exercises a
 // second, independent product pairing rather than depending on TC-01's
-// product still being the only one in the catalogue.
-const CATEGORY = 'Phones' as const;
-const PRODUCT_A = 'Samsung galaxy s6';
+// product still being the only one in the catalogue. PRODUCT_A is the same
+// product the purchase-journey and checkout-validation specs use, imported
+// rather than copied (issue #26 E7).
+const PRODUCT_A = PRODUCT_NAME;
 const PRODUCT_B = 'Nokia lumia 1520';
 
 // demoblaze keys the anonymous cart by a `user` cookie set on landing
@@ -88,62 +90,64 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
 // does not — the anonymous `user` cookie that keys the cart is unchanged by
 // logging in, but the post-login cart view does not surface items added
 // under it. Registered as WEB-010 in docs/defects.md.
-test('TC-08: adding to cart while logged out, then logging in, preserves the cart — WEB-010 @e2e', async ({
-  page,
-  homePage,
-  productPage,
-  cartPage,
-  listingPage,
-  freshAccount,
-}) => {
-  // Preconditions: not logged in. An existing account is available to log
-  // into during the journey — demoblaze cannot be seeded, so that account
-  // is created here via sign-up (without logging in yet) rather than
-  // assumed to pre-exist.
-  await homePage.goto();
-  await homePage.signUp(freshAccount.username, freshAccount.password);
+//
+// Declared with `test.fail()` (issue #26 E10): a known-failing defect
+// reproduction, not a flaky assertion, so `retries: 2` re-running it three
+// times each triples the cost for no new evidence. `test.fail()` runs it
+// once, reports green while the defect persists, and turns red the moment
+// demoblaze fixes it.
+test.fail(
+  'TC-08: adding to cart while logged out, then logging in, preserves the cart — WEB-010 @e2e',
+  async ({ page, homePage, productPage, cartPage, listingPage, freshAccount }) => {
+    // Preconditions: not logged in. An existing account is available to log
+    // into during the journey — demoblaze cannot be seeded, so that account
+    // is created here via sign-up (without logging in yet) rather than
+    // assumed to pre-exist.
+    await homePage.goto();
+    await homePage.signUp(freshAccount.username, freshAccount.password);
 
-  // Step 1: while logged out, add one or more products to the cart.
-  await listingPage.waitUntilLoaded();
-  await listingPage.openCategory(CATEGORY);
-  await listingPage.openProduct(PRODUCT_A);
-  await productPage.waitUntilLoaded();
-  const priceA = await productPage.priceValue();
-  const messageA = await productPage.addToCart();
-  expect(messageA).toMatch(/added/i);
+    // Step 1: while logged out, add one or more products to the cart.
+    await listingPage.waitUntilLoaded();
+    await listingPage.openCategory(CATEGORY);
+    await listingPage.openProduct(PRODUCT_A);
+    await productPage.waitUntilLoaded();
+    const priceA = await productPage.priceValue();
+    const messageA = await productPage.addToCart();
+    expect(messageA).toMatch(/added/i);
 
-  // Step 2: open the cart and note its contents.
-  await cartPage.open();
-  await cartPage.waitForItem(PRODUCT_A);
-  expect(await cartPage.itemCount()).toBe(1);
-  const totalWhileLoggedOut = await cartPage.stableTotal();
-  expect(totalWhileLoggedOut).toBe(priceA);
-  const cookieBeforeLogin = await userCookieValue(page);
-  expect(cookieBeforeLogin).toBeTruthy();
+    // Step 2: open the cart and note its contents.
+    await cartPage.open();
+    await cartPage.waitForItem(PRODUCT_A);
+    expect(await cartPage.itemCount()).toBe(1);
+    const totalWhileLoggedOut = await cartPage.stableTotal();
+    expect(totalWhileLoggedOut).toBe(priceA);
+    const cookieBeforeLogin = await userCookieValue(page);
+    expect(cookieBeforeLogin).toBeTruthy();
 
-  // Step 3: log in with an existing account.
-  await homePage.goto();
-  await homePage.logIn(freshAccount.username, freshAccount.password);
+    // Step 3: log in with an existing account.
+    await homePage.goto();
+    await homePage.logIn(freshAccount.username, freshAccount.password);
 
-  // The identity cookie that keyed the anonymous cart is unchanged by
-  // logging in (WEB-010) — login only adds a separate `tokenp_` cookie
-  // alongside it, it does not rotate `user`. Asserted here, not just
-  // observed while debugging, so a reader of this test's failure output
-  // sees the mechanism WEB-010 claims rather than having to take it on
-  // trust.
-  const cookieAfterLogin = await userCookieValue(page);
-  expect(cookieAfterLogin).toBe(cookieBeforeLogin);
+    // The identity cookie that keyed the anonymous cart is unchanged by
+    // logging in (WEB-010) — login only adds a separate `tokenp_` cookie
+    // alongside it, it does not rotate `user`. Asserted here, not just
+    // observed while debugging, so a reader of this test's failure output
+    // sees the mechanism WEB-010 claims rather than having to take it on
+    // trust.
+    const cookieAfterLogin = await userCookieValue(page);
+    expect(cookieAfterLogin).toBe(cookieBeforeLogin);
 
-  // Step 4: open the cart again.
-  // Expected result: the cart still contains the item added while logged
-  // out; logging in does not lose it. WEB-010: it does not — the cart view
-  // comes back empty despite the identity cookie above being unchanged.
-  await cartPage.open();
-  await cartPage.waitForItem(PRODUCT_A);
-  expect(await cartPage.itemCount()).toBe(1);
-  const totalAfterLogin = await cartPage.stableTotal();
-  expect(totalAfterLogin).toBe(priceA);
-});
+    // Step 4: open the cart again.
+    // Expected result: the cart still contains the item added while logged
+    // out; logging in does not lose it. WEB-010: it does not — the cart view
+    // comes back empty despite the identity cookie above being unchanged.
+    await cartPage.open();
+    await cartPage.waitForItem(PRODUCT_A);
+    expect(await cartPage.itemCount()).toBe(1);
+    const totalAfterLogin = await cartPage.stableTotal();
+    expect(totalAfterLogin).toBe(priceA);
+  },
+);
 
 // TC-19: the add-to-cart confirmation for the same product reads the same
 // whether the shopper is anonymous or logged in — WEB-007. There is one
@@ -155,26 +159,27 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
 //
 // Known to fail: the anonymous confirmation and the logged-in one do not
 // read the same.
-test('TC-19: the add-to-cart confirmation reads the same for anonymous and logged-in shoppers — WEB-007 @e2e', async ({
-  homePage,
-  productPage,
-  listingPage,
-  freshAccount,
-}) => {
-  await homePage.goto();
-  await listingPage.waitUntilLoaded();
-  await listingPage.openCategory(CATEGORY);
-  await listingPage.openProduct(PRODUCT_A);
-  await productPage.waitUntilLoaded();
-  const anonymousMessage = await productPage.addToCart();
+//
+// Declared with `test.fail()` (issue #26 E10), for the same reason as
+// TC-08 above: a known-failing defect reproduction, not a flaky assertion.
+test.fail(
+  'TC-19: the add-to-cart confirmation reads the same for anonymous and logged-in shoppers — WEB-007 @e2e',
+  async ({ homePage, productPage, listingPage, freshAccount }) => {
+    await homePage.goto();
+    await listingPage.waitUntilLoaded();
+    await listingPage.openCategory(CATEGORY);
+    await listingPage.openProduct(PRODUCT_A);
+    await productPage.waitUntilLoaded();
+    const anonymousMessage = await productPage.addToCart();
 
-  await homePage.goto();
-  await logInAs(homePage, freshAccount);
-  await listingPage.waitUntilLoaded();
-  await listingPage.openCategory(CATEGORY);
-  await listingPage.openProduct(PRODUCT_A);
-  await productPage.waitUntilLoaded();
-  const loggedInMessage = await productPage.addToCart();
+    await homePage.goto();
+    await logInAs(homePage, freshAccount);
+    await listingPage.waitUntilLoaded();
+    await listingPage.openCategory(CATEGORY);
+    await listingPage.openProduct(PRODUCT_A);
+    await productPage.waitUntilLoaded();
+    const loggedInMessage = await productPage.addToCart();
 
-  expect(loggedInMessage).toBe(anonymousMessage);
-});
+    expect(loggedInMessage).toBe(anonymousMessage);
+  },
+);
