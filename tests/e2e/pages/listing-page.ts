@@ -190,6 +190,51 @@ export class ListingPage {
   }
 
   /**
+   * Forces a click on `Next` regardless of Playwright's actionability check
+   * (visible/enabled), so TC-10's "the last page offers no way to page
+   * further forward" has an oracle independent of `hasNextPage()` — the
+   * same boolean `collectPages()`'s own loop already used to decide it had
+   * reached this page (issue #26 E5).
+   *
+   * `dispatched` is returned rather than swallowed: a click Playwright
+   * refused to deliver at all (e.g. `display: none`, verified live to be
+   * how demoblaze actually hides this control) and a click that landed but
+   * changed nothing are two different facts, and collapsing them into one
+   * silently-caught error degenerates this into re-reading `productNames()`
+   * with no oracle behind it — unable to tell "the click was refused" from
+   * "the click did nothing" (issue #26 review, item 2). When the click does
+   * land, this waits on the same live signal `clickPrevious()` uses
+   * (`#next2`'s `value` attribute) rather than a fixed sleep, which cannot
+   * prove "no change", only assume it lasted longer than whatever the
+   * stale window turns out to be (module docstring above; issue #26
+   * review, item 3).
+   */
+  async forceClickNext(): Promise<{ dispatched: boolean; window: string[] }> {
+    const beforeValue = (await this.nextControl.getAttribute('value')) ?? '';
+    let dispatched = true;
+    await this.nextControl.click({ force: true, timeout: 2_000 }).catch(() => {
+      dispatched = false;
+    });
+
+    if (!dispatched) {
+      return { dispatched, window: await this.productNames() };
+    }
+
+    await expect(this.nextControl)
+      .not.toHaveAttribute('value', beforeValue, { timeout: NEXT_VALUE_SETTLE_TIMEOUT_MS })
+      .catch(() => {
+        // Timed out without the attribute moving: proof, not an
+        // assumption, that this click did not navigate the listing.
+      });
+    const window = await this.pollUntilStable(
+      () => true,
+      (lastNames) =>
+        `Listing did not settle after a forced click on Next (last read: ${JSON.stringify(lastNames)})`,
+    );
+    return { dispatched, window };
+  }
+
+  /**
    * Opens a product from the current listing window's card link and waits
    * for the detail page's navigation to commit before returning (issue #25
    * E9) — moved here from `HomePage`, which had no notion of the page it

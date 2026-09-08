@@ -47,6 +47,14 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
+  // Unset, Playwright defaults to ~half the CPU count: 2 on ubuntu-latest,
+  // up to 8+ on a many-core laptop. Combined with `retries: 2`, an unbounded
+  // local run puts several concurrent demoblaze sessions plus retries onto
+  // a third-party site this repo argues elsewhere for treating gently, and
+  // interference through demoblaze's shared cart is a plausible source of
+  // the flakiness the retries then paper over (issue #26 C8). One worker in
+  // CI (already serial there in practice); a small, bounded number locally.
+  workers: process.env.CI ? 1 : 2,
   reporter: [['html', { open: 'never' }]],
   use: {
     // Traces are captured on failure regardless of retries, so the @api
