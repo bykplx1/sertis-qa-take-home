@@ -1,9 +1,15 @@
 # Coverage map: demoblaze's interaction surface
 
 **Status: final.** This map lists every interaction demoblaze exposes, once, with what it
-currently costs the suite. Each row's status is grounded against the code, per the method in "How
-each row was grounded" below. The full count — 77 interactions across six statuses, nine of them
-failing by design — is in "Counts".
+currently costs the suite; `automated` and `costed-in-plan-not-automated` rows are grounded
+against the code and the test-plan's task table respectively, while `consciously-excluded` rows
+are this map's own scoping call rather than something the code determines (see "How each row was
+grounded"). The map's original open question — where auth sits relative to the purchase flow — is
+now settled (see "Settled: where auth sits relative to the purchase flow" below), and two
+finer-grained statuses, `driven-not-asserted` and `registered defect, not asserted`, are kept
+rather than collapsed into the three broader ones because they name gaps those three can't (see
+"Status vocabulary"). The full count — 77 interactions across six statuses, nine of them failing
+by design — is in "Counts".
 
 Terms follow `CONTEXT.md`. **TC** ids are cases in `docs/test-cases.md`; **WEB-** ids are entries
 in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test-plan.md`.

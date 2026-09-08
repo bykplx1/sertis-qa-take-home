@@ -45,14 +45,20 @@ effort than the window allows.
 
 ## Entry and exit criteria
 
+**Test environments.** This plan's tasks assume the `@e2e` project as configured in
+`playwright.config.ts:86-113`: Chromium is the default, CI-run environment; Firefox and WebKit are
+configured and runnable locally (task 10) but not wired into CI. The target base url is
+demoblaze itself, overridable via `E2E_BASE_URL` (default `https://www.demoblaze.com`) — there is
+no staging or mirrored environment, per "The case for a controlled test environment" above.
+
 **Entry criteria:**
 
-- The harness (task 1) runs both `@e2e` against a reachable demoblaze and `@api` against a
-  locally started `api-main`; neither is a live blocker before task 3 starts.
+- The harness (task 1) is scaffolded and `@e2e` runs against a reachable demoblaze before task 3
+  starts; nothing downstream is buildable without it.
 - The test-data strategy (a fresh randomised account per run) is agreed, since demoblaze cannot
   be seeded with a fixed account and every downstream task depends on that mechanism working.
-- `api-main` is treated as read-only from the outset — no task in this plan waits on a fix to
-  the defects it demonstrably has, because none will land.
+- `SPEC.md`'s implementation decisions for this suite — seams, selector strategy, oracles — are
+  settled, since work started against a contested seam would be rebuilt once it is.
 
 **Exit criteria:**
 
@@ -62,30 +68,36 @@ effort than the window allows.
 - Every defect found is recorded in `docs/defects.md` with severity, repro steps, and
   expected/actual behaviour, and every test that fails by design carries that defect's id in its
   title — the traceability `SPEC.md`'s "Further Notes" commits to.
-- `npm test` runs both projects to completion and the CI pipeline reports without erroring. A
-  green run is not required: the by-design failures are the deliverable, not a bug to clear
-  before sign-off (see the README's "Expected failures").
+- `npm run test:e2e` runs to completion and the CI `e2e` job reports without erroring. A green
+  run is not required: the by-design failures are the deliverable, not a bug to clear before
+  sign-off (see the README's "Expected failures").
 - Remaining gaps are enumerated, not silent: rows still `costed-in-plan-not-automated` in
   `docs/coverage-map.md` are the honest remainder the QA lead signs off against, not an implied
   completeness.
-- Exit is reached on the tenth elapsed day regardless of open defects in demoblaze or
-  `api-main` — this is a fixed-calendar engagement against two systems this plan cannot fix, so
-  the calendar ends it, not a bug count reaching zero.
+- Exit is reached on the tenth elapsed day regardless of open defects in demoblaze — this is a
+  fixed-calendar engagement against a system this plan cannot fix, so the calendar ends it, not a
+  bug count reaching zero.
 
 ## Risks, mitigations, owners
 
 | Risk | Likelihood | Impact | Mitigation | Owner |
 |---|---|---|---|---|
-| demoblaze changes or degrades mid-engagement — third-party infrastructure that cannot be seeded, reset, or instrumented | High | High: breaks locators or flow assumptions without warning | Text/role-based selectors, a two-retry policy on `@e2e`, and the decay documented in "The case for a controlled test environment" above, accepted rather than denied | Engineer running the `@e2e` track |
-| A read-only `api-main` defect is mistaken for a suite bug during triage | Medium | Medium: wastes investigation time re-deriving a known finding | Every defect gets a `docs/defects.md` entry with severity and repro steps; a failing test's title carries the defect id so red output is self-explaining | Engineer running the `@api` track |
-| CI is deliberately non-blocking (`SPEC.md` "Pipeline"), so a genuine regression could land on `main` unnoticed | Medium | Medium: a real break hides among expected by-design failures | The job summary (`.github/scripts/summarize-failures.js`) names which defect explains each red test; a failure with no matching defect id is visible by inspection rather than buried in a merge that went through anyway | Both engineers, checked at hand-off |
-| Fixed 20 PD budget with no contingency line | Medium | High: any slip cascades onto every downstream task in the dependency chain | Critical-priority tasks are scheduled first on each engineer-track so a slip drops Low-priority tasks (12, 14) before Critical ones; task 3's "Estimate vs. actual" note is the record of this trade-off already happening once, left visible rather than retrofitted | QA lead |
-| A two-engineer team has no backup; either engineer being unavailable stalls their track | Low | High: a stalled track has no slack to absorb it | The per-day, per-engineer calendar reconciliation makes a stalled track visible the same day it happens, not at hand-off | QA lead |
+| demoblaze changes or degrades mid-engagement — third-party infrastructure that cannot be seeded, reset, or instrumented | High | High: breaks locators or flow assumptions without warning | Text/role-based selectors, a two-retry policy on `@e2e`, and the decay documented in "The case for a controlled test environment" above, accepted rather than denied | Whichever engineer's track currently owns the affected task (tasks 3–9, 11–14 per that section) |
+| CI is deliberately non-blocking (`SPEC.md` "Pipeline"), so a genuine regression could land on `main` unnoticed | Medium | Medium: a real break hides among expected by-design failures | The `e2e` job's summary (`.github/scripts/summarize-failures.js`) names which defect explains each red `@e2e` test; a failure with no matching defect id is visible by inspection rather than buried in a merge that went through anyway | Both engineers, checked at hand-off |
+| A one-line task scope hides real cost — task 3 already did this once | Medium | High: further misses eat into a fixed 20 PD budget with no contingency line | Priority ordering already protects Critical work from a slip (Critical tasks scheduled first per engineer-track); see "Estimate vs. actual" below for the concrete instance, its cost, and what a lead would cut to absorb it — recorded there rather than repeated here | QA lead |
+
+**Defect triage.** New `docs/defects.md` entries are triaged by the QA lead against the same
+Critical/High/Medium/Low scale used in "Estimation basis" above: Critical and High are triaged the
+same working day they're filed (before the next day's task assignments are confirmed), Medium
+within two working days, Low by task 15's end-of-engagement compilation if not sooner. This is the
+same priority ordering that already protects the budget in the risk table above, stated as an SLA
+rather than left implied.
 
 **Roles.** Two QA engineers execute the task table in parallel per the calendar reconciliation
 below; a QA lead makes the prioritisation calls in the risk table above when the fixed budget is
-exceeded. The developers who own demoblaze and `api-main` are outside this engagement and receive
-`docs/defects.md` as their queue, not a request for a fix within this ten-day window.
+exceeded and triages defects per the SLA above. The developers who own demoblaze are outside this
+engagement and receive `docs/defects.md` as their queue, not a request for a fix within this
+ten-day window.
 
 ## Tasks
 

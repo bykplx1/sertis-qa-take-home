@@ -315,10 +315,13 @@ not destroy it. This case is not to be read as demonstrating `WEB-005`; the cart
 ## TC-17 — After a completed purchase, the order modal closes, the form clears, and the order cannot be repeated — `WEB-013`
 
 **Filed under browse, not checkout-validation.** This is a checkout/order-modal case, but it lands
-in `tests/e2e/browse.spec.ts` alongside `TC-09`–`TC-19` rather than in
-`tests/e2e/checkout-validation.spec.ts` next to `TC-02`–`TC-06`. It exercises the nav `Cart` link
-(step 3), which needs the `listingPage` fixture the browse cases already share; the
-checkout-validation spec has no navigation-bar interaction and no reason to carry that fixture.
+in `tests/e2e/browse.spec.ts` alongside `TC-09`–`TC-18` rather than in
+`tests/e2e/checkout-validation.spec.ts` next to `TC-02`–`TC-06`. There is no fixture dependency
+forcing that: `checkout-validation.spec.ts` already declares `listingPage` for `TC-03`, and step 3
+of this case reaches the cart via `homePage.openCartFromNav()` (`tests/e2e/browse.spec.ts:366`), a
+`homePage` method, not a `listingPage` one. The filing is historical: the ticket that added the
+browse/listing surface batched this case in alongside it because `docs/coverage-map.md` ties it to
+the nav-chrome `Cart` link row it also demonstrates, not because either spec file needed it there.
 
 **Preconditions:** logged in with a valid account. A product is in the cart. The order form is
 open and filled with valid-looking values.

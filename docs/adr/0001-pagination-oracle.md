@@ -58,11 +58,11 @@ remaining in the DOM while hidden — a real finding, but for the accessibility 
 
 ## Consequences
 
-- Two register entries and their test cases are **drafted separately**, not here, and land in
-  `docs/defects.md` and `docs/test-cases.md` when that work runs.
-- The suite's by-design failure count goes from four to six, which makes the coverage map's open
-  question about `.github/scripts/summarize-failures.js` concrete.
-  Landed; the current by-design count is nine, see the coverage map.
+- Two register entries and their test cases **landed separately**, not here, in
+  `docs/defects.md` and `docs/test-cases.md`.
+- The suite's by-design failure count went from four to six when these landed. It has since
+  grown to nine as further browse/listing coverage shipped — see `docs/coverage-map.md` for the
+  current figure.
 - The partition principle is stated without constants deliberately, so it is reusable as the
   assertion shape for later listing work.
 - Two terms this argument leans on — **result set** and **page window** — are added to
