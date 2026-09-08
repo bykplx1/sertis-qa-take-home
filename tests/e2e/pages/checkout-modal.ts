@@ -33,6 +33,23 @@ export class CheckoutModal {
     await expect(this.modal).toBeVisible();
   }
 
+  /** Whether the modal is currently displayed (TC-17, WEB-013: it should not be, after a purchase is acknowledged). */
+  async isOpen(): Promise<boolean> {
+    return this.modal.isVisible();
+  }
+
+  /** The order form's current field values, used to confirm it was cleared (TC-17, WEB-013: it is not). */
+  async fieldValues(): Promise<Required<OrderDetails>> {
+    return {
+      name: await this.modal.locator('#name').inputValue(),
+      country: await this.modal.locator('#country').inputValue(),
+      city: await this.modal.locator('#city').inputValue(),
+      card: await this.modal.locator('#card').inputValue(),
+      month: await this.modal.locator('#month').inputValue(),
+      year: await this.modal.locator('#year').inputValue(),
+    };
+  }
+
   async fill(details: OrderDetails): Promise<void> {
     if (details.name !== undefined) await this.modal.locator('#name').fill(details.name);
     if (details.country !== undefined) await this.modal.locator('#country').fill(details.country);

@@ -10,10 +10,14 @@ const MAX_POLL_ATTEMPTS = 60; // ~15s ceiling
  * name text.
  *
  * Navigation goes through `page.goto('/cart.html')` rather than clicking
- * the nav "Cart" link: after a purchase, demoblaze leaves the (now
- * dismissed) order modal's backdrop markup in the DOM, which can still
- * intercept pointer events on the nav bar. A direct navigation sidesteps
- * that stale overlay entirely.
+ * the nav "Cart" link: after a purchase, the order modal is never
+ * dismissed at all (`WEB-013`) — `#orderModal` stays `class="modal fade
+ * show"`, `display: block`, form still populated — and Playwright names
+ * the interceptor as `<input id="name">` inside that still-open modal's
+ * subtree, not its backdrop. A direct navigation sidesteps it entirely.
+ * This workaround is correct and must stay; `WEB-013`'s own case (TC-17,
+ * `tests/e2e/browse.spec.ts`) is what deliberately clicks the nav link
+ * instead, as the control under test.
  */
 export class CartPage {
   constructor(private readonly page: Page) {}

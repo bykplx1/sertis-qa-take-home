@@ -1,4 +1,5 @@
 import { type Page } from '@playwright/test';
+import { logInAs } from './support/auth';
 import { test, expect } from './fixtures';
 
 // Two distinct, low-priced, unambiguous products under "Phones" — same
@@ -32,8 +33,7 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   freshAccount,
 }) => {
   await homePage.goto();
-  await homePage.signUp(freshAccount.username, freshAccount.password);
-  await homePage.logIn(freshAccount.username, freshAccount.password);
+  await logInAs(homePage, freshAccount);
 
   // Add PRODUCT_A.
   await listingPage.waitUntilLoaded();
@@ -143,4 +143,38 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
   expect(await cartPage.itemCount()).toBe(1);
   const totalAfterLogin = await cartPage.stableTotal();
   expect(totalAfterLogin).toBe(priceA);
+});
+
+// TC-19: the add-to-cart confirmation for the same product reads the same
+// whether the shopper is anonymous or logged in — WEB-007. There is one
+// intended confirmation for "a product was added"; auth state is not part
+// of that intent (SPEC.md "Assertion basis": "no test is written to
+// certify a known defect as correct"). This compares the two states'
+// messages to each other rather than hardcoding either literal, since the
+// defect is the divergence itself, not one specific wording.
+//
+// Known to fail: the anonymous confirmation and the logged-in one do not
+// read the same.
+test('TC-19: the add-to-cart confirmation reads the same for anonymous and logged-in shoppers — WEB-007 @e2e', async ({
+  homePage,
+  productPage,
+  listingPage,
+  freshAccount,
+}) => {
+  await homePage.goto();
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
+  await homePage.openProduct(PRODUCT_A);
+  await productPage.waitUntilLoaded();
+  const anonymousMessage = await productPage.addToCart();
+
+  await homePage.goto();
+  await logInAs(homePage, freshAccount);
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
+  await homePage.openProduct(PRODUCT_A);
+  await productPage.waitUntilLoaded();
+  const loggedInMessage = await productPage.addToCart();
+
+  expect(loggedInMessage).toBe(anonymousMessage);
 });
