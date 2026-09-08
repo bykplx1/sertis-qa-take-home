@@ -59,7 +59,30 @@ export class HomePage {
     return this.page.locator('#nameofuser');
   }
 
+  /**
+   * Logs out. Like log-in, this updates the nav bar in place with no
+   * native dialog, so no dialog handler is needed here either (TC-16,
+   * issue #22).
+   */
+  async logOut(): Promise<void> {
+    await this.page.getByRole('link', { name: 'Log out', exact: true }).click();
+    await expect(this.page.getByRole('link', { name: 'Log in', exact: true })).toBeVisible();
+  }
+
   async openProduct(productName: string): Promise<void> {
     await this.page.getByRole('link', { name: productName, exact: true }).click();
+  }
+
+  /**
+   * Follows the nav bar's `Cart` link — deliberately different from
+   * `CartPage.open()`'s direct `goto('/cart.html')`, which exists
+   * specifically to route around this control after a purchase (WEB-013,
+   * `tests/e2e/pages/cart-page.ts`). This method is how TC-17 reaches the
+   * control it is actually testing, with a short click timeout so the
+   * defect's permanent interception fails fast rather than waiting out
+   * Playwright's default.
+   */
+  async openCartFromNav(): Promise<void> {
+    await this.page.getByRole('link', { name: 'Cart', exact: true }).click({ timeout: 5_000 });
   }
 }

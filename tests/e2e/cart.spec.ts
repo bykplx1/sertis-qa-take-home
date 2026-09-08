@@ -41,8 +41,11 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   await homePage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const priceA = await productPage.priceValue();
+  // Exact string, not /added/i: both products are added while logged in,
+  // whose confirmation carries a trailing full stop the anonymous one
+  // does not (WEB-007, issue #20).
   const messageA = await productPage.addToCart();
-  expect(messageA).toMatch(/added/i);
+  expect(messageA).toBe('Product added.');
 
   // Add PRODUCT_B.
   await homePage.goto();
@@ -52,7 +55,7 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   await productPage.waitUntilLoaded();
   const priceB = await productPage.priceValue();
   const messageB = await productPage.addToCart();
-  expect(messageB).toMatch(/added/i);
+  expect(messageB).toBe('Product added.');
 
   // Steps 1: open the cart and note the displayed total. Both products
   // appear (acceptance criterion: "several products added all appear in
@@ -109,8 +112,11 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
   await homePage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const priceA = await productPage.priceValue();
+  // Exact string, not /added/i: this shopper is still logged out at this
+  // point, whose confirmation reads without the logged-in state's
+  // trailing full stop (WEB-007, issue #20).
   const messageA = await productPage.addToCart();
-  expect(messageA).toMatch(/added/i);
+  expect(messageA).toBe('Product added');
 
   // Step 2: open the cart and note its contents.
   await cartPage.open();

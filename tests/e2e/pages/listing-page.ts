@@ -134,6 +134,40 @@ export class ListingPage {
    * it (issue #19) — the same idiom as `CartPage.stableTotal()`
    * (`tests/e2e/pages/cart-page.ts:52`).
    */
+  /**
+   * Polls until the listing's product-name window reads the same across
+   * `STABLE_READS_REQUIRED` consecutive checks, then returns it — the
+   * "stopped moving" half of `waitForChange`, exposed on its own for a
+   * case that needs to confirm a window did NOT change after an action
+   * (TC-11, issue #20: `Previous` on the first page should offer no
+   * navigation) rather than one that requires it to.
+   */
+  async waitUntilStable(): Promise<string[]> {
+    let lastKey: string | null = null;
+    let lastNames: string[] = [];
+    let stableReads = 0;
+
+    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+      const currentNames = await this.productNames();
+      const currentKey = JSON.stringify(currentNames);
+
+      if (currentKey === lastKey) {
+        stableReads += 1;
+        if (stableReads >= STABLE_READS_REQUIRED) {
+          return currentNames;
+        }
+      } else {
+        stableReads = 0;
+      }
+
+      lastKey = currentKey;
+      lastNames = currentNames;
+      await this.page.waitForTimeout(POLL_INTERVAL_MS);
+    }
+
+    throw new Error(`Listing did not settle on a stable window (last read: ${JSON.stringify(lastNames)})`);
+  }
+
   async waitForChange(previousWindow: string[]): Promise<string[]> {
     const initialKey = JSON.stringify(previousWindow);
     let lastNames: string[] = [];
