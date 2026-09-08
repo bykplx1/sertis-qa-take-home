@@ -27,6 +27,16 @@ documented behaviour.
   suite actually drove a browser against the live site (issues #10 and #9 respectively), and
   each was **reproduced live** by the test named in its Verification line. Their repro steps
   describe what that test actually did, not a manual procedure still to be automated.
+- `WEB-011` and `WEB-012` were **not** identified during design; they were found by throwaway
+  exploration scripts driving the live site (issues #16 and #18), argued into defects rather than
+  design-time assumptions by `docs/adr/0001-pagination-oracle.md`, and are now **reproduced live**
+  by the `@e2e` suite.
+- `WEB-013` and `WEB-014` were likewise found live, by issue #22's and #17's exploration scripts
+  respectively, and are now reproduced live by the `@e2e` suite.
+- `WEB-007` was identified during design but, as first implemented, asserted too loosely
+  (`/added/i`) to distinguish the two wordings it claims differ. It is now **reproduced live** by
+  `TC-19`, which compares the two states' messages to each other rather than certifying either as
+  correct.
 
 ## `api-main`
 
@@ -190,13 +200,17 @@ documented behaviour.
 ### WEB-007 — Inconsistent add-to-cart confirmation text between logged-in and anonymous users
 
 - **Severity:** Low
-- **Verification:** identified during design (SPEC.md); not yet reproduced against the live site
+- **Verification:** identified during design (SPEC.md). Reproduced live by the `@e2e` suite
+  (`tests/e2e/cart.spec.ts`, `TC-19`): the anonymous confirmation reads `Product added` and the
+  logged-in confirmation reads `Product added.` — a trailing full stop — across six anonymous and
+  five logged-in runs, no exceptions.
 - **Steps to reproduce:** add a product to the cart while logged out and note the confirmation
   dialog text; log in, add a product to the cart, and note the confirmation dialog text again.
 - **Expected behaviour:** the add-to-cart confirmation communicates the same outcome regardless
   of authentication state, so shoppers get a consistent signal that the action registered.
 - **Actual behaviour:** the confirmation text differs between the logged-in and anonymous
   states.
+- Demonstrated by `TC-19` in `docs/test-cases.md`.
 
 ### WEB-008 — Cart total is computed across a request-per-item sequence and is observably racy
 
@@ -253,3 +267,108 @@ documented behaviour.
   the cart is emptied by logging in. This is the same class of identity-key mismatch as WEB-005
   (add and later lookups keyed inconsistently) but triggered by login rather than purchase.
 - Demonstrated by `TC-08` in `docs/test-cases.md`.
+
+### WEB-011 — `Previous` never returns to the preceding page; it shifts the listing forward by one product
+
+- **Severity:** High
+- **Verification:** observed live on 2026-09-07 and again on 2026-09-08 by throwaway exploration
+  scripts (issue #16 and issue #18's measurement comment), reproduced across independent runs on
+  each occasion. Not identified during design. Reproduced live by the `@e2e` suite
+  (`tests/e2e/browse.spec.ts`, `TC-11`).
+- **Steps to reproduce:** land on the home page with no category filter applied. Note the nine
+  products shown, the first being "Samsung galaxy s6". Click `Next` and note the six products
+  shown. Click `Previous`. Note the products now shown, and that "Samsung galaxy s6" is not among
+  them. Click `Previous` a second time and note that nothing changes.
+- **Expected behaviour:** `Previous` returns the listing to the page before the current one. On
+  the first page there is no such page, so the control offers no navigation — it is either hidden
+  (the treatment demoblaze already gives `Next` on the last page) or disabled. It must never move
+  the listing forward, which is the one thing a control labelled "Previous" cannot mean. The pages
+  of the listing partition the catalogue: every product appears on exactly one page, none twice,
+  none missing.
+- **Actual behaviour:** `Previous` moves the listing forward by one product instead of returning
+  to the previous page, from any starting page. From the first page it re-renders the grid as
+  products 2-10, dropping "Samsung galaxy s6". From an honestly-reached second page it produces
+  the same 2-10 window rather than returning to 1-9. In both cases `#next2`'s `value` changes from
+  `9` to `10`, and a second click is idempotent — the window stays at offset 1, which rules out a
+  deliberate item-wise sliding window, since such an intent would step again. In the resulting
+  state product 1 appears on no page and is recoverable only by reloading or clicking `Home`.
+  `Previous` is also visible and clickable on the first page, where demoblaze hides `Next` in the
+  mirror case, so the site is inconsistent with its own convention.
+- **Severity note:** High rather than Medium because the fault is unconditional rather than a
+  first-page edge case. It is reached by the ordinary browse path — page forward, then page back —
+  and the product it makes unreachable, "Samsung galaxy s6", is the product `TC-01`, `TC-07` and
+  the checkout-validation suite all purchase. It denies a shopper access to a product on the
+  mainline path, which is a direct hit on user story 8.
+- Demonstrated by `TC-11` in `docs/test-cases.md`.
+
+### WEB-012 — Pagination silently discards the active category filter
+
+- **Severity:** Medium
+- **Verification:** observed live on 2026-09-07 by the throwaway exploration script recorded in
+  issue #16, in all three categories. Not identified during design. Reproduced live by the `@e2e`
+  suite (`tests/e2e/browse.spec.ts`, `TC-12`).
+- **Steps to reproduce:** from the home page select the `Phones` category and note that seven
+  products are shown, all phones. Observe that `Next` is visible. Click it and note the products
+  now shown. Repeat with `Laptops` (six products) and `Monitors` (two products).
+- **Expected behaviour:** pagination partitions the filtered result set. With a category selected,
+  either no `Next` control is offered — because every product matching the filter is already on
+  screen, which is the case for all three of demoblaze's categories — or, if a filtered set ever
+  exceeded one page, the next page contains only products matching that filter. A shopper's
+  explicitly chosen filter is never discarded by a control that says nothing about filtering.
+- **Actual behaviour:** `Next` is visible under all three categories even though none has a second
+  page, and clicking it in any of them yields the same unfiltered page 2 ("Apple monitor 24,
+  MacBook air, Dell i7 8gb, 2017 Dell 15.6 Inch, ASUS Full HD, MacBook Pro"). The category filter
+  is silently discarded, with nothing in the re-rendered grid indicating it is gone, so a shopper
+  who filtered to `Phones` is shown laptops and monitors in a list they have every reason to read
+  as phones. Both symptoms follow from one cause: the paginator computes page availability and
+  page contents over the unfiltered 15-product catalogue and is not category-aware.
+- Demonstrated by `TC-12` in `docs/test-cases.md`.
+
+### WEB-013 — The order modal stays open after a successful purchase, blocking the nav bar and accepting a duplicate order
+
+- **Severity:** High
+- **Verification:** observed live on 2026-09-08 by throwaway exploration scripts, reproduced
+  across two independent probes (8 runs and 2 runs), anonymous and logged in. Not identified
+  during design. Reproduced live by the `@e2e` suite (`tests/e2e/browse.spec.ts`, `TC-17`).
+- **Steps to reproduce:** add a product to the cart, open the cart and click `Place Order`.
+  Complete the form and click `Purchase`. Note the confirmation and its order id, then dismiss it
+  with `OK`. Observe the order modal. Attempt to click any link in the navigation bar. Click
+  `Purchase` a second time and note the order id and amount.
+- **Expected behaviour:** acknowledging the purchase confirmation closes the order modal and
+  returns the shopper to the site. The order form, which holds their name and full card number,
+  is cleared. The order cannot be placed a second time from a cart the completed order has already
+  emptied.
+- **Actual behaviour:** the order modal is never dismissed. After `OK`, `#orderModal` remains
+  `class="modal fade show"` with `display: block`, covering the viewport, with the shopper's name
+  and full card number still in the form and a live `Purchase` button. Every navigation-bar link
+  is unreachable behind it — Playwright names the interceptor as `<input id="name">` within the
+  `#orderModal` subtree, and `elementFromPoint` over a nav link returns `#name`. Clicking
+  `Purchase` again is accepted and returns a second, different order id against a cart the first
+  order already emptied. The second order's amount bears no relation to the cart: one probe run
+  returned `105730 USD` for a 360 USD product, another returned `360 USD`. The modal's own `Close`
+  button works, and the navigation bar behaves normally afterwards.
+- **Severity note:** High because a shopper who clicks the still-live `Purchase` button — a
+  reasonable thing to do when the form is still in front of them and nothing indicates the order
+  completed — places a duplicate order for a fabricated amount. It also leaves a full card number
+  on screen after the transaction the shopper believes is finished.
+- Demonstrated by `TC-17` in `docs/test-cases.md`.
+
+### WEB-014 — A filtered listing has no address, and browser Back discards the filter
+
+- **Severity:** Low
+- **Verification:** observed live on 2026-09-08 by a throwaway exploration script (issue #17).
+  Reproduced live by the `@e2e` suite (`tests/e2e/browse.spec.ts`, `TC-18`).
+- **Steps to reproduce:** from the home page select the `Laptops` category and note the listing.
+  Note the browser's address bar. Open a product from the filtered listing, then press the
+  browser's Back button.
+- **Expected behaviour:** a filtered listing is a distinct view of the catalogue and has an
+  address, so a shopper can bookmark it, share it, or return to it. Returning from a product
+  opened out of a filtered listing restores that listing, not the unfiltered one.
+- **Actual behaviour:** category links are `href="#"` and filtering runs entirely in client-side
+  JavaScript (`byCat()`), so the active filter never enters the URL and a filtered listing cannot
+  be addressed at all. Browser Back from a product detail page lands on the unfiltered first page,
+  silently discarding a choice the shopper made.
+- **Severity note:** Low. It costs the shopper a re-click rather than money or access, and no
+  product becomes unreachable. Recorded because it is a real loss of a shopper's stated intent,
+  not because it blocks a journey.
+- Demonstrated by `TC-18` in `docs/test-cases.md`.

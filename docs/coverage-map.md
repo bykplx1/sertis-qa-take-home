@@ -1,17 +1,24 @@
 # Coverage map: demoblaze's interaction surface
 
-**Status: draft.** Produced by the inventory ticket (#16) of the coverage map (#15). Every
-interaction demoblaze exposes is listed once, with what it currently costs the suite. Later
-tickets in #15 pick their work from this table; nothing here is a decision about what to
-automate beyond the status each row already has.
+**Status: final.** Drafted by the inventory ticket (#16) of the coverage map (#15) and finalised
+by #21 once the browse/listing coverage it inventoried (#17, #18, #20, #22) landed. Every
+interaction demoblaze exposes is listed once, with what it costs the suite. The open question
+this map originally carried — where auth sits relative to the purchase flow, and whether the nav
+`Home` and `Cart` links belong in scope — is settled; see "Settled: where auth sits relative to
+the purchase flow" and the corrected nav-chrome rows below. Five rows still carry the finer-grained `driven-not-asserted` and `registered defect, not
+asserted` statuses this map introduced specifically to name gaps that
+`automated`/`costed-in-plan-not-automated`/`consciously-excluded` cannot express on their own
+(see "Status vocabulary"); collapsing them into the three broader buckets would lose that
+information rather than complete the map, and none of them changed as a result of this ticket's
+work.
 
 Terms follow `CONTEXT.md`. **TC** ids are cases in `docs/test-cases.md`; **WEB-** ids are entries
 in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test-plan.md`.
 
 ## How each row was grounded
 
-- **Automated** rows were read out of `tests/e2e/` — the four spec files (`smoke`,
-  `purchase-journey`, `cart`, `checkout-validation`) and the five page objects under
+- **Automated** rows were read out of `tests/e2e/` — the spec files (`smoke`,
+  `purchase-journey`, `cart`, `checkout-validation`, `browse`) and the page objects under
   `tests/e2e/pages/`. A row is *automated* only if a spec asserts on it, not merely drives
   through it.
 - **Costed in plan, not automated** rows map to a scoped line in `docs/test-plan.md`'s task
@@ -41,13 +48,14 @@ in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test
 | Interaction | Page | In purchase flow | Status | TC | Notes |
 |---|---|---|---|---|---|
 | Brand `PRODUCT STORE` / logo → `index.html` (`#nava`) | all | no | consciously-excluded | — | #15 out of scope. `tests/e2e/smoke.spec.ts` asserts the brand link is *visible*, never clicks it. |
-| `Home` nav link → `index.html` | all | yes | costed-in-plan-not-automated | — | Task 3. Every spec reaches home via `page.goto('/')` (`home-page.ts:14`); the link itself is never clicked. Confirmed live that clicking it resets a category-filtered listing to the full first page. |
+| `Home` nav link → `index.html` | all | yes | consciously-excluded | — | Ruled out of scope by #22: a plain hyperlink with no application behaviour of its own, and its one interesting property — resetting a category filter — is `TC-13`'s oracle reached through a second door. Every spec reaches home via `page.goto('/')` (`home-page.ts:14`) instead. |
 | `Contact` → `#exampleModal` | all | no | consciously-excluded | — | #15 out of scope. |
 | `About us` → `#videoModal` (video.js player) | all | no | consciously-excluded | — | #15 out of scope. |
-| `Cart` nav link (`#cartur`) → `cart.html` | all | yes | costed-in-plan-not-automated | — | Task 4. `CartPage.open()` deliberately uses `page.goto('/cart.html')` instead, to dodge the stale order-modal backdrop (`cart-page.ts:11-19`). The nav link is therefore never exercised. |
+| `Cart` nav link → `cart.html` | `index.html`, `prod.html` | yes | automated (fails by design) | TC-17 | `#cartur` on `index.html`/`prod.html`. **Correction:** this row previously described the link on `cart.html` as the same `#cartur` control; on `cart.html` it is `<a href="#" onclick="showcart()">`, with no `#cartur` id and no navigation, and is out of scope for this row. `CartPage.open()` uses `page.goto('/cart.html')` for its own navigation steps (`cart-page.ts:11-19`), but `TC-17` deliberately clicks this link as the control under test, after a completed purchase — where it demonstrates `WEB-013`: the still-open order modal intercepts the click. |
+| `Cart` nav link (`onclick="showcart()"`, no id, no navigation) | `cart.html` | no | consciously-excluded | — | A same-page refresh of the cart the shopper is already viewing; distinct control from the `#cartur` link above. No application behaviour to assert. |
 | `Log in` link (`#login2`) → `#logInModal` | all | yes | automated | TC-01 | `HomePage.logIn()`. |
 | `Sign up` link (`#signin2`) → `#signInModal` | all | yes | automated | TC-01 | `HomePage.signUp()`. |
-| `Log out` link (`#logout2`, `onclick="logOut()"`) | all | ambiguous — see the auth question below | costed-in-plan-not-automated | — | The one gap in the plan itself: task 6's scope line names account creation, login, duplicate signup and wrong password, and does **not** name log-out. Recorded here so it stops being invisible. |
+| `Log out` link (`#logout2`, `onclick="logOut()"`) | all | yes, promoted by #16's rule | automated | TC-16 | The one gap in the plan itself: task 6's scope line names account creation, login, duplicate signup and wrong password, and does **not** name log-out. #16 promoted it into the purchase flow as the mirror of `TC-08`, since it is the second place an auth action can change what is in the cart. `TC-16` asserts the cart belongs to the account, not the session: hidden after log-out, restored on logging back in. Passes. |
 | `Welcome {username}` label (`#nameofuser`) | all | yes | automated | TC-01 | Asserted in `HomePage.logIn()` (`home-page.ts:56`) as the login oracle. |
 | Navbar toggler (`.navbar-toggler`, collapsed viewport) | all | no | costed-in-plan-not-automated | — | Task 13 (mobile). |
 | Footer copyright text | all | no | consciously-excluded | — | Static text, no interaction. |
@@ -65,9 +73,9 @@ in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test
 | Interaction | Page | In purchase flow | Status | TC | Notes |
 |---|---|---|---|---|---|
 | `CATEGORIES` header (`#cat`, `href=""`) | home | no | costed-in-plan-not-automated | — | Task 3. Empty `href` reloads the page rather than acting as a filter; it looks like a control and is not one. |
-| `Phones` (`onclick="byCat('phone')"`) | home | yes | driven-not-asserted | TC-01, TC-02–TC-08 | `HomePage.openCategory('Phones')` (`home-page.ts:63`) is used as a navigation step by every journey spec. **No test asserts the listing actually narrows.** Live: 7 products. |
-| `Laptops` (`byCat('notebook')`) | home | yes | costed-in-plan-not-automated | — | Task 3. Never driven by any test. Live: 6 products. |
-| `Monitors` (`byCat('monitor')`) | home | yes | costed-in-plan-not-automated | — | Task 3. Never driven by any test. Live: 2 products. |
+| `Phones` (`onclick="byCat('phone')"`) | home | yes | automated | TC-01, TC-02–TC-08, TC-13, TC-14, TC-15 | `HomePage.openCategory('Phones')` (`home-page.ts:63`) is used as a navigation step by the journey specs, and is now also asserted on: `TC-13`/`TC-14`/`TC-15` enumerate every category from the DOM and assert the listing narrows to a non-empty proper subset, that it is covered by the union of categories, and that card/detail agree. Live: 7 products. |
+| `Laptops` (`byCat('notebook')`) | home | yes | automated | TC-13, TC-14, TC-15 | Enumerated from the DOM, not hardcoded. Live: 6 products. |
+| `Monitors` (`byCat('monitor')`) | home | yes | automated | TC-13, TC-14, TC-15 | Enumerated from the DOM, not hardcoded. Live: 2 products. |
 | Category links share `id="itemc"` | home | n/a | registered defect, not asserted | — | `WEB-006`. Worked around by role/name selectors (`home-page.ts` class comment); no test asserts the ids are unique. |
 
 ### Product listing grid (`#tbodyid .card`)
@@ -77,23 +85,24 @@ in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test
 | Grid renders 9 product cards on page 1 | home | yes | costed-in-plan-not-automated | — | Task 3. No test asserts a card count or that the grid rendered at all. |
 | Card title link → `prod.html?idp_=N` | home | yes | automated | TC-01 | `HomePage.openProduct(name)` clicks by accessible name. |
 | Card image link → same product page | home | yes | costed-in-plan-not-automated | — | Task 3. Second route to the same destination; untested. |
-| Card price (`<h5>$360</h5>`) | home | yes | costed-in-plan-not-automated | — | Task 3. Price is asserted on the detail page and in the cart, never on the card — so listing-vs-detail price agreement is unverified. |
+| Card price (`<h5>$360</h5>`) | home | yes | automated | TC-15 | Compared to the detail page's parsed price amount, not its text — the card reads `$360`, the detail page `$360 *includes tax`. Closes the listing-vs-detail price agreement gap this row previously flagged as unverified. |
 | Card description (`<p id="article">`) | home | yes | costed-in-plan-not-automated | — | Task 3. `id="article"` is duplicated across every card (`WEB-006`). |
 | Card image `alt` is empty on every card | home | no | costed-in-plan-not-automated | — | Task 11 (accessibility). Observed live: `<img class="card-img-top" src="imgs/galaxy_s6.jpg" alt="">`. |
 
 ### Pagination (`#prev2` / `#next2`)
 
-All five rows are task 3 territory that task 3's one-line scope ("category navigation, product
-listing, product detail page") does not actually name — the estimate-vs-actual note #15 calls
-for belongs here.
+Task 3's one-line scope ("category navigation, product listing, product detail page") never
+named pagination; the estimate-vs-actual note in `docs/test-plan.md` records that gap. All five
+rows are now automated, once `docs/adr/0001-pagination-oracle.md` settled the oracle these
+assertions needed and could not have been written without.
 
 | Interaction | Page | In purchase flow | Status | TC | Notes |
 |---|---|---|---|---|---|
-| `Next` from page 1 → page 2 | home | yes | costed-in-plan-not-automated | — | Task 3. The only way to reach 6 of the 15 products. |
-| `Next` on the last page | home | yes | costed-in-plan-not-automated | — | Task 3. See pagination observations below. |
-| `Previous` from page 2 | home | yes | costed-in-plan-not-automated | — | Task 3. |
-| `Previous` on page 1 | home | yes | costed-in-plan-not-automated | — | Task 3. See pagination observations below. |
-| Pagination while a category filter is applied | home | yes | costed-in-plan-not-automated | — | Task 3. See pagination observations below. |
+| `Next` from page 1 → page 2 | home | yes | automated | TC-09, TC-10 | The only way to reach 6 of the 15 products. `TC-09` asserts the two pages partition the catalogue. |
+| `Next` on the last page | home | yes | automated | TC-10 | No further forward navigation is offered. Not a defect (ADR-0001 ruling 1). |
+| `Previous` from page 2 | home | yes | automated (fails by design) | TC-11 | `WEB-011`. Returns products 2-10, not 1-9 — does not return to the preceding page. |
+| `Previous` on page 1 | home | yes | automated (fails by design) | TC-11 | `WEB-011`. Visible, clickable, and moves the listing forward by one product instead of offering no navigation. |
+| Pagination while a category filter is applied | home | yes | automated (fails by design) | TC-12 | `WEB-012`. `Next` is offered under every category though none has a second page, and paging forward discards the filter. |
 
 ### Product detail page (`prod.html?idp_=N`)
 
@@ -104,8 +113,9 @@ for belongs here.
 | Product description (`.description`) | product | yes | automated | TC-01 | Asserted non-empty only; the text itself is not compared to the listing card. |
 | Product image | product | yes | costed-in-plan-not-automated | — | Task 3. |
 | `Add to cart` (`onclick="addToCart(N)"`) + native alert | product | yes | automated | TC-01, TC-07, TC-08 | `ProductPage.addToCart()` registers the dialog handler before the click (SPEC.md "Dialog handling") and asserts the message matches `/added/i`. |
-| Add-to-cart alert text differs anonymous vs logged in | product | yes | registered defect, not asserted | — | `WEB-007`. The `/added/i` assertion is loose enough to pass under both wordings, so no test demonstrates the inconsistency. |
+| Add-to-cart alert text differs anonymous vs logged in | product | yes | automated (fails by design) | TC-19 | `WEB-007`. `TC-19` compares the two states' messages to each other rather than hardcoding either literal — the four journey call sites still use the intent-level `/added/i`, since wording was never their subject. |
 | Detail-page tabs (`#myTab`, single empty `<li class="active">`) | product | no | consciously-excluded | — | Renders as an empty pill list; no interaction available. |
+| Browser Back from a product opened out of a filtered listing | product | yes | automated (fails by design) | TC-18 | `WEB-014`. Filtering is pure client-side JS (`href="#"`, `byCat()`) and never enters the URL, so a filtered listing has no address; Back lands on the unfiltered first page instead of the filtered listing. |
 
 ### Cart page (`cart.html`)
 
@@ -136,6 +146,7 @@ for belongs here.
 | `Purchase` button (`onclick="purchaseOrder()"`) | cart | yes | automated | TC-01–TC-06 | |
 | Inline error label (`#errors`) | cart | yes | costed-in-plan-not-automated | — | Task 9. TC-03/TC-04 assert only that *no confirmation appears*; the message shown to the shopper is never read. |
 | `Close` button / `×` dismiss | cart | no | consciously-excluded | — | #15 out of scope (modal dismiss paths). |
+| Modal state after dismissing a successful purchase's confirmation | cart | yes | automated (fails by design) | TC-17 | `WEB-013`. `#orderModal` is never dismissed: it stays full-viewport with the shopper's name and full card number still in the form, intercepting the whole nav bar, and a second `Purchase` books a duplicate order for a fabricated amount. |
 
 ### Order confirmation (SweetAlert `.sweet-alert`)
 
@@ -178,54 +189,65 @@ for belongs here.
 
 | Status | Rows |
 |---|---|
-| `automated` | 27 |
-| `automated` (fails by design) | 2 |
-| `driven-not-asserted` | 2 |
-| `costed-in-plan-not-automated` | 26 |
-| `consciously-excluded` | 12 |
-| registered defect, not asserted | 5 |
-| **Total** | **74** |
+| `automated` | 34 |
+| `automated` (fails by design) | 9 |
+| `driven-not-asserted` | 1 |
+| `costed-in-plan-not-automated` | 15 |
+| `consciously-excluded` | 14 |
+| registered defect, not asserted | 4 |
+| **Total** | **77** |
 
-The two rows marked *fails by design* are the empty-cart guard (TC-02 / `WEB-009`) and cart
-survival across log-in (TC-08 / `WEB-010`). The other two designed failures, TC-05 (`WEB-001`) and
-TC-06 (`WEB-002`), sit inside rows marked plainly `automated` — the `Credit card` and
-`Month`/`Year` fields — because those same rows also carry passing assertions. Four designed
-failures in total, unchanged from `docs/test-cases.md`.
+The nine rows marked *fails by design* are the empty-cart guard (TC-02 / `WEB-009`), cart
+survival across log-in (TC-08 / `WEB-010`), `Previous` from page 2 and from page 1 (TC-11 /
+`WEB-011`, two rows), pagination discarding a category filter (TC-12 / `WEB-012`), the
+add-to-cart wording mismatch (TC-19 / `WEB-007`), browser Back discarding a filtered listing
+(TC-18 / `WEB-014`), and the still-open order modal after purchase (TC-17 / `WEB-013`, two rows:
+the nav `Cart` link it blocks, and the modal's own state). The remaining two designed failures,
+TC-05 (`WEB-001`) and TC-06 (`WEB-002`), sit inside rows marked plainly `automated` — the
+`Credit card` and `Month`/`Year` fields — because those same rows also carry passing assertions.
+Across these nine rows plus the two `automated` rows above, nine distinct `WEB-` ids fail by
+design in total (`WEB-011` and `WEB-013` each span two rows; the other seven span one each),
+matching `docs/test-cases.md` and the `@e2e` suite's actual result: 24 tests, 15 pass, 9 fail by
+design.
 
 Rows are counted per *interaction*, so one test case can appear on several rows (TC-01 touches
 nine) and one row can carry several cases.
 
-## The open question: where does auth sit relative to the purchase flow?
+## Settled: where auth sits relative to the purchase flow
 
 The brief scopes automation to "the process from selecting one or more products, adding them to
 the cart, to submitting an order". Signing up and logging in are steps 2 and 3 of TC-01, so *some*
 auth is plainly inside the journey; but "select → cart → order" does not reach duplicate signup,
-wrong password, or log-out. The map needs one rule, not a case-by-case argument.
+wrong password, or log-out. The map needed one rule, not a case-by-case argument.
 
-### Recommendation
+### The rule, as decided
 
 **Split auth on a single line: auth is in the purchase flow exactly where it changes what a
 shopper can buy or what happens to their cart. Everything else about auth is credential
 handling, and stays costed under task 6 rather than being automated as browse/purchase work.**
 
-That line puts these **inside** the flow, and they are already automated:
+That line puts these **inside** the flow, and they are automated:
 
 - sign up (TC-01 step 2) and log in (step 3) — the preconditions of an authenticated purchase;
 - the anonymous purchase path (`purchase-journey.spec.ts`), which proves auth is optional to buying;
 - cart survival across log-in (TC-08 / `WEB-010`) — the one place auth demonstrably changes what
-  is in the cart.
+  is in the cart;
+- logging out (TC-16) — the mirror case, promoted rather than parked (below).
 
 And it puts these **outside**, remaining `costed-in-plan-not-automated` under task 6:
 
 - duplicate signup, wrong password, non-existent user, blank credentials — these test the
   credential check, not the purchase. A shopper who fails them never reaches a cart.
 
-**Log-out is the one row this rule promotes rather than parks.** Logging out is the mirror of
-TC-08: it is the second place in the site where an auth action can change what is in the cart, and
-demoblaze already has a registered identity-key defect on exactly that seam (`WEB-005`: cart keyed
-by token when adding, by username when emptying). By the rule above, "add to cart while logged in,
-log out, open the cart" is *inside* the purchase flow and worth a test — and it is the one
-interaction the plan's task table never names at all. Recommend a TC-09-or-later case for it.
+**Log-out was the one row this rule promoted rather than parked, and it shipped as `TC-16`.**
+Logging out is the mirror of TC-08: it is the second place in the site where an auth action can
+change what is in the cart, and demoblaze already has a registered identity-key defect on exactly
+that seam (`WEB-005`: cart keyed by token when adding, by username when emptying). Measured in
+#22: `TC-16` passes — the cart belongs to the account, not the session, and is hidden rather than
+destroyed by logging out. It does not demonstrate `WEB-005`; three completed purchases, two of
+them logged in, all left the cart correctly empty, so the seam #16 promoted on suspicion of a
+defect is the one demoblaze gets right. `WEB-005` stays a registered defect, not asserted, on
+its own row above.
 
 ### Why this line and not the alternatives
 
@@ -241,10 +263,13 @@ interaction the plan's task table never names at all. Recommend a TC-09-or-later
   be a navigation step in every spec while nothing asserts that it filters. A stated line is the
   point of this map.
 
-## Pagination: observations from the live site
+## Pagination: observations from the live site, and the rulings they led to
 
-Facts recorded on 2026-09-07 from the throwaway exploration script. **These are observations
-only.** Whether any of them is a defect is ticket #18's call, not this document's.
+Facts recorded on 2026-09-07 from the throwaway exploration script. `docs/adr/0001-pagination-oracle.md`
+(#18) has since ruled on each: behaviour 2 is `WEB-011` (High), behaviour 3 is `WEB-012`
+(Medium), behaviour 1 is not a defect, and behaviour 4 (page size) is not assertable. `TC-09`
+through `TC-12` (`tests/e2e/browse.spec.ts`) now automate all five rows in the Pagination table
+above.
 
 1. **Catalogue size and page size.** 15 products in total. Page 1 of the unfiltered home listing
    shows **9**; page 2 shows the remaining **6**. No page-number control exists — only `Previous`

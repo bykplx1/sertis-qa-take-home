@@ -90,3 +90,39 @@ functional core (tasks 3–9) they exercise. The register (task 15) runs as a ba
 throughout the engagement in practice — findings are logged as they occur, not withheld to day
 10 — but is placed last in the schedule table because its estimate covers the compilation and
 final hand-off, which genuinely is end-of-engagement work.
+
+## Estimate vs. actual: task 3 was under-scoped
+
+Task 3's one-line scope — "category navigation, product listing, product detail page" — costed
+at 1.5 PD, is what a QA lead would have read as the browse surface's whole cost. It wasn't. Once
+`docs/coverage-map.md` (#16) inventoried the surface in full, pagination turned out to be five
+further interactions the scope line never named, and a defect oracle for two of them
+(`WEB-011`, `WEB-012`) had to be argued from first principles rather than read off a spec
+(`docs/adr/0001-pagination-oracle.md`, #18) before a test could even be written. Category-narrows-
+listing (`TC-13`–`TC-15`) turned out to need its own oracle work too: no rendered evidence
+anywhere on the site connects a product to a category, so "Laptops shows only laptops" is not an
+assertable claim, and the cases that shipped assert something weaker and harder to design —
+selectivity and self-consistency — instead (#17). None of that is visible in a one-line scope
+that reads like a straightforward CRUD-listing check.
+
+**This reconciliation is deliberately left broken, not retrofitted.** The task table above is
+untouched: it still reads 1.5 PD for task 3 and the column still totals 20.0 PD against a 20 PD
+budget. Rewriting task 3's estimate now, after the actual cost is known, would launder a planning
+miss into a plan that always looked right — exactly the kind of retrofit that makes an estimation
+section worthless to a reader trying to judge the *process* that produced it, not just its
+output. The honest record is that a QA lead reading only the original task table would have
+under-bought this task, and the estimation basis should be read with that failure left visible.
+
+**What a QA lead would have had to drop to buy the real cost.** The pagination and category work
+that actually shipped is, at a rough count, closer to a full day than the 1.5 PD task 3 already
+carries for the whole browse surface — call it a further 0.5–1.0 PD once the ADR work, the two
+listing oracles, and the auth-invariance parameterisation (`TC-13`–`TC-15` each running twice)
+are counted. Against a fixed 20 PD budget with no slack, that has to come from somewhere else.
+The candidates, in the order a lead should cut them: task 12 (visual regression, 1.0 PD, lowest
+priority on the table and the dimension a demo storefront needs least) first, then task 14
+(localisation, 0.5 PD, already scoped as a readiness audit rather than real locale coverage on a
+site that ships English-only). Cutting both frees 1.5 PD, enough to absorb the miss without
+touching anything Critical- or High-priority. Task 3 itself would need to be re-scoped from
+"category navigation, product listing, product detail page" to explicitly name pagination and
+the category-narrows-listing oracle, so the next estimate is not made against the same
+incomplete description.

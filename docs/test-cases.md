@@ -1,13 +1,14 @@
-# Designed test cases: demoblaze purchase journey
+# Designed test cases: the demoblaze storefront
 
-The written source for the `@e2e` purchase-flow coverage. One happy-path journey and seven
-unhappy paths, each stated as intent: preconditions, steps, expected result. No selectors, no
-code — the automated specs (see the `@e2e` purchase-journey, cart-behaviour and
-checkout-validation work) map to these cases step for step.
+The written source for the `@e2e` coverage of demoblaze's storefront: browsing and category
+filtering, the product listing and its pagination, the cart, and the purchase journey. Each case
+is stated as intent: preconditions, steps, expected result. No selectors, no code — the automated
+specs (`tests/e2e/*.spec.ts`) map to these cases step for step.
 
 Terms follow `CONTEXT.md`: **journey** is one complete path from landing to order confirmation,
 **e2e** is a test that drives demoblaze through a browser, **defect** is a numbered discrepancy
-recorded in `docs/defects.md`.
+recorded in `docs/defects.md`, **result set** is the products a listing is currently showing, and
+**page window** is the contiguous slice of that result set one page of a listing shows.
 
 A case expected to fail carries the `WEB-` defect id it demonstrates. Two cases below were known
 at design time to be expected to fail because demoblaze performs no such validation: `TC-05` and
@@ -23,8 +24,20 @@ demoblaze defect was anticipated when this document was first written. `TC-02` c
 (found implementing the checkout-validation suite, issue #10) and `TC-08` carries `WEB-010`
 (found implementing the cart-behaviour suite, issue #9); both ids were added to the register
 after the fact rather than assumed up front, the same way `TC-05` and `TC-06` assumed `WEB-001`
-and `WEB-002` up front. Four cases below are therefore expected to fail by design in total:
-`TC-02`, `TC-05`, `TC-06`, and `TC-08`.
+and `WEB-002` up front.
+
+`TC-09` onward cover the browse and listing surface, added once `docs/adr/0001-pagination-oracle.md`
+settled a pagination oracle and issues #17 and #22 designed the remaining category, cart-identity
+and post-purchase-navigation cases. Five of them are expected to fail by design: `TC-11`
+(`WEB-011`), `TC-12` (`WEB-012`), `TC-17` (`WEB-013`), `TC-18` (`WEB-014`), and `TC-19`
+(`WEB-007`, added once the existing `/added/i` assertion was found too loose to demonstrate it).
+Nine cases are therefore expected to fail by design in total: `TC-02`, `TC-05`, `TC-06`, `TC-08`,
+`TC-11`, `TC-12`, `TC-17`, `TC-18`, and `TC-19`.
+
+Category filtering asserts that the listing is **selective and self-consistent**, never that it
+is **semantically correct**: no rendered evidence anywhere in demoblaze — not the listing card,
+not the product detail page — connects a product to a category, so no test here can assert that
+"Laptops shows only laptops". `TC-13` and `TC-14` compare the site to itself instead.
 
 ## TC-01 — Happy path: sign up, add to cart, place an order, see confirmation
 
@@ -169,3 +182,190 @@ cookie's value is unchanged by logging in (login only adds a separate `tokenp_` 
 cart shown after logging in is empty — the post-login cart lookup does not surface items stored
 under the pre-login identity. This case is written from intended behaviour and fails by design,
 demonstrating `WEB-010`.
+
+## Browse and listing cases
+
+`TC-09` through `TC-12` assert the two principles argued in `docs/adr/0001-pagination-oracle.md`:
+the pages of a listing partition its result set, and a control labelled with a direction either
+moves the listing that way or is not offered. None of them names a product count, so a changed
+catalogue does not turn the suite red.
+
+## TC-09 — The pages of the unfiltered listing partition the catalogue
+
+**Preconditions:** demoblaze is reachable. No category filter is applied.
+
+**Steps:**
+
+1. Land on the home page and note the first page window.
+2. Page forward through every further page the listing offers.
+
+**Expected result:** no product appears on more than one page window, and no product is missing
+from all of them — the page windows partition the unfiltered result set.
+
+## TC-10 — The last page offers no way to page further forward
+
+**Preconditions:** demoblaze is reachable. No category filter is applied.
+
+**Steps:**
+
+1. Land on the home page and page forward to the last page the listing offers.
+
+**Expected result:** the last page offers no further forward navigation — the control that would
+move the listing further forward is either hidden, disabled, or, if clicked, leaves the listing
+unchanged. This is the convention `TC-11` relies on demoblaze already applying in one direction.
+
+## TC-11 — `Previous` returns to the preceding page, and offers nothing on the first page — `WEB-011`
+
+**Preconditions:** demoblaze is reachable. No category filter is applied.
+
+**Steps:**
+
+1. From the first page, note whether `Previous` is offered, and if so what clicking it does to
+   the listing.
+2. From an honestly-reached second page (arrived at via `Next`, not via `Previous`), click
+   `Previous` and note the listing.
+
+**Expected result:** on the first page, `Previous` offers no navigation — it either is not
+offered, or clicking it leaves the listing unchanged. From the second page, `Previous` returns
+the listing to the first page's products.
+
+**Known to fail:** `Previous` moves the listing forward by one product instead of returning to
+the previous page, from any starting page. This case is written from intended behaviour and
+fails by design, demonstrating `WEB-011`.
+
+## TC-12 — Paging within a category keeps the category filter — `WEB-012`
+
+**Preconditions:** demoblaze is reachable.
+
+**Steps:**
+
+1. For each category the page offers, select it and note the resulting listing.
+2. If a further page is offered under that category, page forward and note the listing.
+
+**Expected result:** if a further page is offered while a category filter is active, every
+product it shows also matches that filter. A shopper's chosen category is never silently
+discarded by paging forward.
+
+**Known to fail:** `Next` is offered under every category even though none has a second page,
+and paging forward under any of them shows the unfiltered catalogue's second page instead. This
+case is written from intended behaviour and fails by design, demonstrating `WEB-012`.
+
+`TC-13` through `TC-15` each run twice, once anonymous and once logged in, to prove browsing is
+auth-invariant rather than assume it. Neither run is expected to fail.
+
+## TC-13 — Selecting a category narrows the listing to a non-empty proper subset of the catalogue
+
+**Preconditions:** demoblaze is reachable.
+
+**Steps:**
+
+1. Note the unfiltered result set.
+2. For each category the page offers, select it and note the resulting result set.
+
+**Expected result:** each category's result set is non-empty, every product in it also appears
+in the unfiltered result set, and it is strictly smaller than the unfiltered result set — a
+non-empty proper subset, not the whole catalogue again.
+
+## TC-14 — Every product on the unfiltered listing appears in some category
+
+**Preconditions:** demoblaze is reachable.
+
+**Steps:**
+
+1. Note the unfiltered result set.
+2. Note the union of every category's result set.
+
+**Expected result:** every product in the unfiltered result set appears in at least one
+category's result set — nothing on the storefront is unreachable by browsing categories. This
+does not assert the reverse (that the union equals the unfiltered set exactly): a catalogue that
+added an uncategorised product would be a correct system, not a broken one, and this case must
+not fail against it.
+
+## TC-15 — A product opened from the listing shows that product, at that price
+
+**Preconditions:** demoblaze is reachable.
+
+**Steps:**
+
+1. For each product card in a listing, open the product it links to.
+
+**Expected result:** the detail page's product name matches the card's title, and the detail
+page's price, as a parsed amount rather than as text, matches the card's price. Comparing parsed
+amounts is deliberate: the card and the detail page format the same price differently.
+
+## TC-16 — Logging out hides the account's cart, and logging back in restores it
+
+**Preconditions:** a fresh account exists and is logged in. The cart is empty.
+
+**Steps:**
+
+1. While logged in, add one or more products to the cart.
+2. Open the cart and note its contents.
+3. Log out.
+4. Open the cart.
+5. Log back in with the same account.
+6. Open the cart again.
+
+**Expected result:** after logging out, the cart shows none of the items added while logged
+in — the anonymous shopper is not shown the account's cart. After logging back in, the cart
+contains exactly the items added in step 1, at the same prices: logging out hid the cart, it did
+not destroy it. This case is not to be read as demonstrating `WEB-005`; the cart-clearing seam
+`WEB-005` describes did not reproduce when checked alongside it.
+
+## TC-17 — After a completed purchase, the order modal closes, the form clears, and the order cannot be repeated — `WEB-013`
+
+**Preconditions:** logged in with a valid account. A product is in the cart. The order form is
+open and filled with valid-looking values.
+
+**Steps:**
+
+1. Submit the order and note the confirmation.
+2. Dismiss the confirmation.
+3. Attempt to reach the cart from the `Cart` link in the navigation bar.
+4. Submit the order a second time.
+
+**Expected result:** dismissing the confirmation closes the order modal and clears the form,
+which held the shopper's name and full card number. With the modal gone, the shopper can reach
+the rest of the site — the nav `Cart` link works and shows the now-empty cart. The order cannot
+be submitted a second time from a cart the first order already emptied.
+
+**Known to fail:** the order modal is never dismissed. It stays open, full-viewport, with the
+form still populated, and its subtree intercepts pointer events across the whole viewport, so
+the nav bar is unreachable behind it. Submitting the order a second time is accepted and books a
+duplicate order for a fabricated amount. This case is written from intended behaviour and fails
+by design, demonstrating `WEB-013`.
+
+## TC-18 — Browser Back from a product opened out of a filtered listing restores that listing — `WEB-014`
+
+**Preconditions:** demoblaze is reachable.
+
+**Steps:**
+
+1. Select a category and note the resulting listing.
+2. Open a product from that listing.
+3. Press the browser's Back button.
+
+**Expected result:** the listing shown after Back is the filtered listing from step 1, not the
+unfiltered catalogue.
+
+**Known to fail:** category filtering runs entirely in client-side JavaScript and never enters
+the URL, so a filtered listing has no address. Browser Back lands on the unfiltered first page
+instead, silently discarding the shopper's chosen filter. This case is written from intended
+behaviour and fails by design, demonstrating `WEB-014`.
+
+## TC-19 — The add-to-cart confirmation reads the same for anonymous and logged-in shoppers — `WEB-007`
+
+**Preconditions:** demoblaze is reachable. An account is available to log into.
+
+**Steps:**
+
+1. While logged out, add a product to the cart and note the confirmation.
+2. Log in, add the same product to the cart again, and note the confirmation.
+
+**Expected result:** the two confirmations read the same. There is one intended message for "a
+product was added"; which auth state the shopper is in is not part of that intent. Neither
+wording is hardcoded as the expectation, because the defect this case demonstrates is the
+divergence between the two, not one particular wording.
+
+**Known to fail:** the anonymous and logged-in confirmations do not read the same. This case is
+written from intended behaviour and fails by design, demonstrating `WEB-007`.
