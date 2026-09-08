@@ -10,6 +10,7 @@
     "pretest:api": "cd api-main && npm install --no-save --no-audit --no-fund",
     "test:api": "playwright test --project=api",
     "test:cross-browser": "playwright test --project=e2e-firefox --project=e2e-webkit",
+    "typecheck": "tsc --noEmit",
     "report": "playwright show-report",
     "perf:load": "k6 run perf/demoblaze-load.js",
     "perf:smoke": "k6 run -e PERF_PROFILE=smoke perf/demoblaze-load.js"

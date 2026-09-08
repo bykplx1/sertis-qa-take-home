@@ -79,7 +79,7 @@ behaviour — in `docs/defects.md`.
 
 ## Exercise map: brief → file
 
-`QA Take-Home-Test.docx.pdf` (repo root) is the original brief. Each of its parts maps to a
+`docs/QA Take-Home-Test.docx.pdf` is the original brief. Each of its parts maps to a
 specific deliverable:
 
 | Brief exercise | Deliverable | File(s) |

@@ -113,7 +113,7 @@ function renderSummary(entries, stats) {
   lines.push(`## Failure summary - ${suiteLabel}`);
   lines.push('');
   lines.push(
-    `${stats.expected} passed, ${entries.length} not passing (of ${stats.total} total).`,
+    `${stats.expected ?? '?'} passed, ${entries.length} not passing (of ${stats.total} total).`,
   );
   lines.push('');
 
@@ -186,13 +186,25 @@ function renderBrokenRun(reason) {
   lines.push(`- **Why:** ${reason}`);
   lines.push(`- **Test step exit code:** \`${testStepExitCode}\``);
   lines.push(
-    '- **Note:** this job is configured with `continue-on-error` on the test step so a red ' +
-      'result never blocks a merge (see `.github/workflows/ci.yml`) - that setting keeps the ' +
-      'job from *gating*, it does not mean the run passed. Check the "Run tests" step log ' +
-      'above for the underlying cause (dependency install, browser install, or the ' +
-      'local server/webServer failing to start).',
+    '- **Note:** this failed the job on purpose. `continue-on-error` on the test step (see ' +
+      '`.github/workflows/ci.yml`) only stops a red *test* result from blocking a merge - it ' +
+      "does not apply here. A broken run isn't a test result to certify either way, so this " +
+      'step deliberately goes red instead. Check the "Run tests" step log above for the ' +
+      'underlying cause (dependency install, browser install, or the local server/webServer ' +
+      'failing to start).',
   );
   return lines.join('\n');
+}
+
+// A broken run is not a test failure - the non-gating policy for test
+// failures (SPEC.md:19) is deliberate and untouched by this. But a broken
+// run being invisible is a defect in the pipeline itself: setting
+// `process.exitCode` here (rather than inside the pure `renderBrokenRun`
+// above) is what lets the "Summarize failures" step in ci.yml, which is not
+// wrapped in `continue-on-error`, actually fail the job.
+function reportBrokenRun(reason) {
+  process.exitCode = 2;
+  writeSummary(renderBrokenRun(reason));
 }
 
 function writeSummary(markdown) {
@@ -205,7 +217,7 @@ function writeSummary(markdown) {
 
 function main() {
   if (!resultsPath) {
-    writeSummary(renderBrokenRun('No results file path was given to summarize-failures.js.'));
+    reportBrokenRun('No results file path was given to summarize-failures.js.');
     return;
   }
 
@@ -214,7 +226,7 @@ function main() {
     // report (e.g. the webServer never started, or `npm ci`/browser install
     // failed upstream). Say so loudly rather than pretending there were no
     // failures.
-    writeSummary(renderBrokenRun(`No results file found at \`${resultsPath}\`.`));
+    reportBrokenRun(`No results file found at \`${resultsPath}\`.`);
     return;
   }
 
@@ -222,7 +234,20 @@ function main() {
   try {
     report = readJson(resultsPath);
   } catch (err) {
-    writeSummary(renderBrokenRun(`Could not parse \`${resultsPath}\`: ${err.message}`));
+    reportBrokenRun(`Could not parse \`${resultsPath}\`: ${err.message}`);
+    return;
+  }
+
+  // JSON.parse succeeds on plenty of things that aren't a Playwright report:
+  // `null`, a bare number, an array. readJson's caller above only catches a
+  // parse failure, not a successful parse of a non-object - reading `.suites`
+  // off `null` throws past this function's boundary instead of rendering the
+  // broken-run section this whole script exists to guarantee.
+  if (report === null || typeof report !== 'object' || Array.isArray(report)) {
+    reportBrokenRun(
+      `\`${resultsPath}\` parsed but is not a Playwright JSON report object ` +
+        `(got ${report === null ? 'null' : Array.isArray(report) ? 'an array' : typeof report}).`,
+    );
     return;
   }
 
@@ -231,11 +256,32 @@ function main() {
     classification: classify(e),
   }));
 
+  // `hasStats` gates on the same signal the old code used
+  // (`report.stats && typeof report.stats.expected === 'number'`): a report
+  // whose `stats` object is missing or unusable falls back to
+  // `nonPassing.length` rather than to 0. That fallback is load-bearing, not
+  // cosmetic - a report with real failing tests but no usable `stats` must
+  // still compute a non-zero total, or it wrongly hits the zero-tests
+  // broken-run check below and turns a TEST FAILURE into what reads as a
+  // BROKEN RUN (see C1: those two must never be conflated).
+  //
+  // When `hasStats` is true, each field is still defaulted individually
+  // (not gated as a group) so a stats object with some but not all fields
+  // numeric (e.g. `{ expected: 2 }`) doesn't sum to `undefined`s and render
+  // "undefined passed ... (of NaN total)" - NaN === 0 is false, so that
+  // used to slip past the zero-tests broken-run check instead of being
+  // caught by it.
+  const s = report.stats;
+  const hasStats = s && typeof s.expected === 'number';
+  const total = hasStats
+    ? (typeof s.expected === 'number' ? s.expected : 0) +
+      (typeof s.unexpected === 'number' ? s.unexpected : 0) +
+      (typeof s.flaky === 'number' ? s.flaky : 0) +
+      (typeof s.skipped === 'number' ? s.skipped : 0)
+    : nonPassing.length;
   const stats = {
-    total: report.stats && typeof report.stats.expected === 'number'
-      ? report.stats.expected + report.stats.unexpected + report.stats.flaky + report.stats.skipped
-      : nonPassing.length,
-    expected: report.stats ? report.stats.expected : undefined,
+    total,
+    expected: hasStats ? s.expected : undefined,
   };
 
   // A results file that exists and parses but describes zero executed tests
@@ -244,11 +290,9 @@ function main() {
   // non-zero. Rendering that as "0 not passing, no failures" is a false
   // green; this is the case that motivated this whole function.
   if (stats.total === 0) {
-    writeSummary(
-      renderBrokenRun(
-        `The results file exists and parses, but describes zero executed tests ` +
-          `(0 of 0). The test process likely exited before running anything.`,
-      ),
+    reportBrokenRun(
+      `The results file exists and parses, but describes zero executed tests ` +
+        `(0 of 0). The test process likely exited before running anything.`,
     );
     return;
   }
