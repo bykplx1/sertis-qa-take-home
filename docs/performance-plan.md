@@ -171,6 +171,12 @@ notion of "fast enough."
 All four are pass/fail thresholds encoded in the k6 script (`thresholds` block), not advisory
 lines on a chart. A run that breaches any threshold fails, by design.
 
+**What "order submission" actually measures.** demoblaze's purchase flow never contacts a server
+with the order (`ASSUMPTIONS.md`, "The one the acceptance criteria calls out by name"), so there
+is no order-submission request to time; the script measures the `deletecart` call that empties the
+cart on purchase instead, as the closest real request to that step (`perf/demoblaze-load.js`,
+tagged `order_submission`), scoped to the `checkout` scenario only.
+
 Percentiles are reported throughout (p75/p95, per metric above), not averages — an average
 hides the slow tail a real shopper actually experiences.
 

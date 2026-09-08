@@ -82,10 +82,24 @@ did not purchase) — nothing is left behind in the shared demo instance.
 
 | Metric | Threshold |
 |---|---|
-| `http_req_duration{name:order_submission}` p95 | < 1000ms |
+| `http_req_duration{name:order_submission,scenario:checkout}` p95 | < 1000ms |
 | `http_req_duration{name:add_to_cart}` p95 | < 300ms |
 | `http_req_failed` rate | < 1% |
 | `browser_web_vital_lcp` p75 | < 2500ms |
+| `checks` rate | > 99% |
+
+demoblaze's purchase flow never contacts a server with the order
+(`ASSUMPTIONS.md`, "The one the acceptance criteria calls out by name"), so
+"order submission" above is measured against the `deletecart` call that empties
+the cart on purchase — the closest real request to that step — scoped to the
+`checkout` scenario, not the funnel scenario's differently-distributed
+purchases.
+
+Every threshold expression also carries a `count>0` (or, for `checks`, is
+itself a rate that only holds meaningfully on `>0` samples): a metric that
+collected zero samples — every iteration timing out before reaching that
+request, say — otherwise reports its threshold as trivially held rather than
+as the measured-nothing run it actually is.
 
 A run that breaches any of these fails — that is the intended behaviour, not
 a bug: the script is designed to produce a verdict, not a chart. k6 exits `99`
@@ -98,7 +112,7 @@ the LCP threshold is set on — appears in that file; k6's default trend stats
 omit it, which would leave the LCP threshold reporting "held" without ever
 showing the number it held at.
 
-## Discrepancy between the plan and issue #13, reported rather than resolved
+## Discrepancy between the plan and its implementation, reported rather than resolved
 
 `performance-plan.md` §3 specifies the funnel scenario's ramp-down as
 "duration left to k6's default ramp-down behaviour," but k6's `ramping-vus`

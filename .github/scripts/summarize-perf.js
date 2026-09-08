@@ -45,16 +45,30 @@ function readSummary(path) {
 
 /** k6 reports a threshold as `{ ok: bool }` per expression, keyed by the
  * expression string, under each metric's `thresholds` object. Flattens that
- * into one row per expression. */
+ * into one row per expression.
+ *
+ * Each row also carries the metric's sample count (`values.count`, falling
+ * back to `values.passes` for `checks`-style metrics that don't report a
+ * plain `count`), so "held" on a smoke run's two samples and "held" on a
+ * nine-minute run's thousands never read identically (C11) — a reader sees
+ * the sample size a verdict was computed on, not just the verdict. */
 function collectThresholds(metrics) {
   const rows = [];
   for (const [metricName, metric] of Object.entries(metrics || {})) {
     if (!metric || !metric.thresholds) continue;
+    const values = metric.values || {};
+    const samples =
+      typeof values.count === 'number'
+        ? values.count
+        : typeof values.passes === 'number'
+          ? values.passes + (values.fails || 0)
+          : null;
     for (const [expression, result] of Object.entries(metric.thresholds)) {
       rows.push({
         metric: metricName,
         expression,
         ok: result && result.ok !== false,
+        samples,
       });
     }
   }
@@ -138,10 +152,21 @@ if (summary === null) {
   }
 
   say('');
-  say('| Threshold | Metric | Verdict |');
-  say('|---|---|---|');
+  say(
+    profile === 'smoke'
+      ? `Profile: \`smoke\`. A smoke run is seconds long with single-digit VUs, by design — read ` +
+          'its "held" verdicts against the sample counts below, not as the plan-shaped `full` ' +
+          "run's evidence."
+      : `Profile: \`${profile}\`.`,
+  );
+  say('');
+  say('| Threshold | Metric | Samples | Verdict |');
+  say('|---|---|---|---|');
   for (const t of thresholds) {
-    say(`| \`${t.expression}\` | \`${t.metric}\` | ${t.ok ? ':white_check_mark: held' : ':x: breached'} |`);
+    const samples = t.samples === null ? '—' : String(t.samples);
+    say(
+      `| \`${t.expression}\` | \`${t.metric}\` | ${samples} | ${t.ok ? ':white_check_mark: held' : ':x: breached'} |`,
+    );
   }
 
   say('');

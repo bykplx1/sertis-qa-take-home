@@ -173,15 +173,44 @@ export const options = {
     // a server with the order); the network operation that actually happens
     // on purchase is the deletecart call that empties the cart before the
     // client renders its confirmation. That call is tagged `order_submission`
-    // and is the closest real request to measure against this threshold.
-    'http_req_duration{name:order_submission}': ['p(95)<1000'],
+    // and is the closest real request to measure against this threshold
+    // (docs/performance-plan.md §4, ASSUMPTIONS.md's "one the acceptance
+    // criteria calls out by name"). Scoped to `scenario:checkout` only
+    // (performance-plan.md §4) — the funnel scenario's purchases arrive
+    // after randomised think-times under ramping load, a differently
+    // distributed population that would otherwise dilute this p95.
+    // A metric with zero samples (e.g. every iteration timing out before
+    // reaching a given request) otherwise reports its threshold as
+    // trivially held rather than as the measured-nothing run it actually
+    // is. k6 rejects a `count` aggregation on Trend metrics
+    // (`http_req_duration`, `browser_web_vital_lcp`) and on Rate metrics
+    // (`http_req_failed`, `checks`) alike — only Counter metrics
+    // (`http_reqs`, `iterations`) support it — so every threshold below is
+    // paired with a `count>0` sibling threshold on the matching Counter
+    // metric, same tag filter where one applies, as the sample guard.
+    'http_req_duration{name:order_submission,scenario:checkout}': ['p(95)<1000'],
+    'http_reqs{name:order_submission,scenario:checkout}': ['count>0'],
     // Add-to-cart p95 < 300ms (performance-plan.md §4).
     'http_req_duration{name:add_to_cart}': ['p(95)<300'],
+    'http_reqs{name:add_to_cart}': ['count>0'],
     // Request failure rate < 1% (performance-plan.md §4), across every
     // protocol-level request in both scenarios.
     http_req_failed: ['rate<0.01'],
     // LCP p75 < 2500ms (performance-plan.md §4), from the browser-level VUs.
     browser_web_vital_lcp: ['p(75)<2500'],
+    'iterations{scenario:web_vitals}': ['count>0'],
+    // Every check() in this script (setup, funnel, checkout) is decorative
+    // without this: a shape drift in a request payload (e.g. `:addtocart`)
+    // can make demoblaze answer 200 with an error body on every call, which
+    // http_req_failed never sees (still a 2xx) and which even makes
+    // durations look *faster* (the server does less real work) — a run that
+    // exercised nothing would otherwise report every threshold held.
+    checks: ['rate>0.99'],
+    // One global sample guard: if not a single protocol request went out
+    // (setup failed, DNS/network down, demoblaze unreachable), every
+    // threshold above that isn't independently guarded (http_req_failed,
+    // checks) would otherwise hold vacuously on zero samples too.
+    http_reqs: ['count>0'],
   },
 };
 
