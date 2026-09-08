@@ -1,4 +1,5 @@
 import { type Page } from '@playwright/test';
+import { logInAs } from './support/auth';
 import { test, expect } from './fixtures';
 
 // Two distinct, low-priced, unambiguous products under "Phones" — same
@@ -32,8 +33,7 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   freshAccount,
 }) => {
   await homePage.goto();
-  await homePage.signUp(freshAccount.username, freshAccount.password);
-  await homePage.logIn(freshAccount.username, freshAccount.password);
+  await logInAs(homePage, freshAccount);
 
   // Add PRODUCT_A.
   await listingPage.waitUntilLoaded();
@@ -41,11 +41,8 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   await homePage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const priceA = await productPage.priceValue();
-  // Exact string, not /added/i: both products are added while logged in,
-  // whose confirmation carries a trailing full stop the anonymous one
-  // does not (WEB-007, issue #20).
   const messageA = await productPage.addToCart();
-  expect(messageA).toBe('Product added.');
+  expect(messageA).toMatch(/added/i);
 
   // Add PRODUCT_B.
   await homePage.goto();
@@ -55,7 +52,7 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   await productPage.waitUntilLoaded();
   const priceB = await productPage.priceValue();
   const messageB = await productPage.addToCart();
-  expect(messageB).toBe('Product added.');
+  expect(messageB).toMatch(/added/i);
 
   // Steps 1: open the cart and note the displayed total. Both products
   // appear (acceptance criterion: "several products added all appear in
@@ -112,11 +109,8 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
   await homePage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const priceA = await productPage.priceValue();
-  // Exact string, not /added/i: this shopper is still logged out at this
-  // point, whose confirmation reads without the logged-in state's
-  // trailing full stop (WEB-007, issue #20).
   const messageA = await productPage.addToCart();
-  expect(messageA).toBe('Product added');
+  expect(messageA).toMatch(/added/i);
 
   // Step 2: open the cart and note its contents.
   await cartPage.open();
@@ -149,4 +143,38 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
   expect(await cartPage.itemCount()).toBe(1);
   const totalAfterLogin = await cartPage.stableTotal();
   expect(totalAfterLogin).toBe(priceA);
+});
+
+// TC-19: the add-to-cart confirmation for the same product reads the same
+// whether the shopper is anonymous or logged in — WEB-007. There is one
+// intended confirmation for "a product was added"; auth state is not part
+// of that intent (SPEC.md "Assertion basis": "no test is written to
+// certify a known defect as correct"). This compares the two states'
+// messages to each other rather than hardcoding either literal, since the
+// defect is the divergence itself, not one specific wording.
+//
+// Known to fail: the anonymous confirmation and the logged-in one do not
+// read the same.
+test('TC-19: the add-to-cart confirmation reads the same for anonymous and logged-in shoppers — WEB-007 @e2e', async ({
+  homePage,
+  productPage,
+  listingPage,
+  freshAccount,
+}) => {
+  await homePage.goto();
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
+  await homePage.openProduct(PRODUCT_A);
+  await productPage.waitUntilLoaded();
+  const anonymousMessage = await productPage.addToCart();
+
+  await homePage.goto();
+  await logInAs(homePage, freshAccount);
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
+  await homePage.openProduct(PRODUCT_A);
+  await productPage.waitUntilLoaded();
+  const loggedInMessage = await productPage.addToCart();
+
+  expect(loggedInMessage).toBe(anonymousMessage);
 });

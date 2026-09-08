@@ -49,10 +49,11 @@ test('TC-01: sign up, add to cart, place an order, see confirmation @e2e', async
   const productPrice = await productPage.priceValue();
 
   // 6. Add the product to the cart and acknowledge the add-to-cart confirmation.
-  // Exact string, not /added/i: the logged-in confirmation carries a
-  // trailing full stop the anonymous one does not (WEB-007, issue #20).
+  // Intent-level match: this journey's subject is that adding registers at
+  // all, not the confirmation's exact wording. The wording's consistency
+  // across auth states is TC-19's subject (cart.spec.ts, WEB-007).
   const addToCartMessage = await productPage.addToCart();
-  expect(addToCartMessage).toBe('Product added.');
+  expect(addToCartMessage).toMatch(/added/i);
 
   // 7. Open the cart and confirm the product appears, priced correctly.
   await cartPage.open();
@@ -108,11 +109,8 @@ test('anonymous shopper can add to cart and place an order without an account @e
   await productPage.waitUntilLoaded();
   const productPrice = await productPage.priceValue();
 
-  // Exact string, not /added/i: this shopper is anonymous, whose
-  // confirmation reads without the logged-in state's trailing full stop
-  // (WEB-007, issue #20).
   const addToCartMessage = await productPage.addToCart();
-  expect(addToCartMessage).toBe('Product added');
+  expect(addToCartMessage).toMatch(/added/i);
 
   await cartPage.open();
   await cartPage.waitForItem(PRODUCT_NAME);

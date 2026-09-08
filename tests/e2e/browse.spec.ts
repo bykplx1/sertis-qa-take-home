@@ -1,4 +1,6 @@
 import { type ListingPage } from './pages/listing-page';
+import { ProductPage } from './pages/product-page';
+import { logInAs } from './support/auth';
 import { test, expect } from './fixtures';
 
 // TC-09 through TC-18 in the ticket that wrote them (issue #20; the cases
@@ -9,8 +11,10 @@ import { test, expect } from './fixtures';
 // nav bar (TC-17) and the filtered listing's browser history (TC-18).
 //
 // Four of these fail by design: WEB-011 (TC-11), WEB-012 (TC-12), WEB-013
-// (TC-17), WEB-014 (TC-18) — bringing the suite's by-design failure count
-// from four to eight (docs/adr/0001-pagination-oracle.md, issue #21).
+// (TC-17), WEB-014 (TC-18). Together with TC-19 (WEB-007, cart.spec.ts —
+// not this file, since it belongs next to the add-to-cart tests it
+// extends), the suite's by-design failure count goes from four to nine
+// (docs/adr/0001-pagination-oracle.md, issue #21).
 
 const CATEGORY = 'Phones' as const;
 const PRODUCT_NAME = 'Samsung galaxy s6';
@@ -156,8 +160,7 @@ for (const authState of AUTH_STATES) {
     }) => {
       await homePage.goto();
       if (authState === 'logged in') {
-        await homePage.signUp(freshAccount.username, freshAccount.password);
-        await homePage.logIn(freshAccount.username, freshAccount.password);
+        await logInAs(homePage, freshAccount);
       }
 
       const unfilteredPages = await collectPages(listingPage);
@@ -188,8 +191,7 @@ for (const authState of AUTH_STATES) {
     }) => {
       await homePage.goto();
       if (authState === 'logged in') {
-        await homePage.signUp(freshAccount.username, freshAccount.password);
-        await homePage.logIn(freshAccount.username, freshAccount.password);
+        await logInAs(homePage, freshAccount);
       }
 
       const unfilteredNames = (await collectPages(listingPage)).flat();
@@ -214,50 +216,44 @@ for (const authState of AUTH_STATES) {
     });
 
     test(`TC-15 (${authState}): a listing card and its detail page agree on the product and its parsed price @e2e`, async ({
+      page,
       homePage,
       listingPage,
-      productPage,
       freshAccount,
     }) => {
-      test.setTimeout(90_000);
-
       await homePage.goto();
       if (authState === 'logged in') {
-        await homePage.signUp(freshAccount.username, freshAccount.password);
-        await homePage.logIn(freshAccount.username, freshAccount.password);
+        await logInAs(homePage, freshAccount);
       }
 
       await listingPage.waitUntilLoaded();
-      let pageIndex = 0;
-
-      // Forward-only pagination, as everywhere else in this file: walk
-      // every page once, verifying each card against its own detail page,
-      // then step forward again from a fresh Home rather than navigating
-      // Back — a paginated (or filtered) listing has no address to return
-      // to directly (TC-18, WEB-014).
       let hasMorePages = true;
+
+      // Forward-only pagination, as everywhere else in this file. Each
+      // card's detail page is opened in a second, throwaway page rather
+      // than navigated to on this one — the listing page's current
+      // window is never disturbed, so this stays linear in the number of
+      // products instead of the re-pagination an O(n^2) walk would
+      // otherwise need, and it never relies on browser Back, which
+      // WEB-014 (TC-18) shows does not return to a paginated window.
       while (hasMorePages) {
         const window = await listingPage.productNames();
 
         for (const name of window) {
           const cardPrice = await listingPage.cardPrice(name);
+          const href = await listingPage.hrefFor(name);
 
-          await homePage.openProduct(name);
+          const detailPage = await page.context().newPage();
+          const productPage = new ProductPage(detailPage);
+          await detailPage.goto(href);
           await productPage.waitUntilLoaded();
           await expect(productPage.name).toHaveText(name);
           expect(await productPage.priceValue()).toBe(cardPrice);
-
-          // Rebuild this same page window before checking its next card.
-          await homePage.goto();
-          await listingPage.waitUntilLoaded();
-          for (let step = 0; step < pageIndex; step++) {
-            await listingPage.nextPage();
-          }
+          await detailPage.close();
         }
 
         if (await listingPage.hasNextPage()) {
           await listingPage.nextPage();
-          pageIndex += 1;
         } else {
           hasMorePages = false;
         }
@@ -279,8 +275,7 @@ test("TC-16: logging out hides the account's cart, and logging back in restores 
   freshAccount,
 }) => {
   await homePage.goto();
-  await homePage.signUp(freshAccount.username, freshAccount.password);
-  await homePage.logIn(freshAccount.username, freshAccount.password);
+  await logInAs(homePage, freshAccount);
 
   // Step 1: while logged in, add a product to the cart.
   await listingPage.waitUntilLoaded();
@@ -331,8 +326,7 @@ test('TC-17: after a completed purchase, the order modal closes, the form clears
   freshAccount,
 }) => {
   await homePage.goto();
-  await homePage.signUp(freshAccount.username, freshAccount.password);
-  await homePage.logIn(freshAccount.username, freshAccount.password);
+  await logInAs(homePage, freshAccount);
 
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);

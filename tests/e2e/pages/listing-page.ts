@@ -89,6 +89,22 @@ export class ListingPage {
     return parsePrice(text, 'listing card');
   }
 
+  /**
+   * The `prod.html?idp_=N` target behind a card's title link. TC-15 (issue
+   * #20) opens this in a second page rather than navigating the current
+   * one away from its page window — keeping that check linear in the
+   * number of products, instead of the re-pagination an O(n^2) walk would
+   * otherwise need, and without relying on browser Back, which WEB-014
+   * (TC-18) shows does not return to a filtered or paginated window.
+   */
+  async hrefFor(productName: string): Promise<string> {
+    const href = await this.cardFor(productName).locator('h4.card-title a').getAttribute('href');
+    if (!href) {
+      throw new Error(`No href found for product "${productName}"`);
+    }
+    return href;
+  }
+
   /** Whether a further page window is offered ahead of the current one. */
   async hasNextPage(): Promise<boolean> {
     return this.page.locator('#next2').isVisible();
@@ -121,19 +137,48 @@ export class ListingPage {
   }
 
   /**
-   * Polls until the listing's product-name window has both changed from
-   * `previousWindow` and settled — read the same across
-   * `STABLE_READS_REQUIRED` consecutive checks — then returns it. A
-   * category click (and `Next`) leaves the OLD window rendered for
-   * 321-702ms before flipping, but the flip itself is not instantaneous
-   * for every card: reading on the first observed difference risks
-   * returning a partially-rendered grid. "The listing's product-name
-   * window is no longer what it was, and has stopped moving" is the sound
-   * synchronisation primitive here, and it is also TC-13's own assertion,
-   * so it is exposed once rather than hand-rolled in every spec that needs
-   * it (issue #19) — the same idiom as `CartPage.stableTotal()`
-   * (`tests/e2e/pages/cart-page.ts:52`).
+   * Polls the listing's product-name window until `isAcceptable` accepts
+   * it and it then reads the same across `STABLE_READS_REQUIRED`
+   * consecutive checks, then returns it. A category click (and `Next`)
+   * leaves the OLD window rendered for 321-702ms before flipping, but the
+   * flip itself is not instantaneous for every card: reading on the first
+   * observed difference risks returning a partially-rendered grid.
+   * "Acceptable, and has stopped moving" is the sound synchronisation
+   * primitive here, and `waitForChange` and `waitUntilStable` are both
+   * exactly that shape — they differ only in what "acceptable" means —
+   * so the poll itself lives once (issue #19 / issue #20 review) rather
+   * than being hand-rolled per case, the same idiom as
+   * `CartPage.stableTotal()` (`tests/e2e/pages/cart-page.ts:52`).
    */
+  private async pollUntilStable(
+    isAcceptable: (window: string[]) => boolean,
+    describeTimeout: (lastWindow: string[]) => string,
+  ): Promise<string[]> {
+    let lastKey: string | null = null;
+    let lastNames: string[] = [];
+    let stableReads = 0;
+
+    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+      const currentNames = await this.productNames();
+      const currentKey = JSON.stringify(currentNames);
+
+      if (isAcceptable(currentNames) && currentKey === lastKey) {
+        stableReads += 1;
+        if (stableReads >= STABLE_READS_REQUIRED) {
+          return currentNames;
+        }
+      } else {
+        stableReads = 0;
+      }
+
+      lastKey = currentKey;
+      lastNames = currentNames;
+      await this.page.waitForTimeout(POLL_INTERVAL_MS);
+    }
+
+    throw new Error(describeTimeout(lastNames));
+  }
+
   /**
    * Polls until the listing's product-name window reads the same across
    * `STABLE_READS_REQUIRED` consecutive checks, then returns it — the
@@ -143,56 +188,24 @@ export class ListingPage {
    * navigation) rather than one that requires it to.
    */
   async waitUntilStable(): Promise<string[]> {
-    let lastKey: string | null = null;
-    let lastNames: string[] = [];
-    let stableReads = 0;
-
-    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-      const currentNames = await this.productNames();
-      const currentKey = JSON.stringify(currentNames);
-
-      if (currentKey === lastKey) {
-        stableReads += 1;
-        if (stableReads >= STABLE_READS_REQUIRED) {
-          return currentNames;
-        }
-      } else {
-        stableReads = 0;
-      }
-
-      lastKey = currentKey;
-      lastNames = currentNames;
-      await this.page.waitForTimeout(POLL_INTERVAL_MS);
-    }
-
-    throw new Error(`Listing did not settle on a stable window (last read: ${JSON.stringify(lastNames)})`);
+    return this.pollUntilStable(
+      () => true,
+      (lastNames) => `Listing did not settle on a stable window (last read: ${JSON.stringify(lastNames)})`,
+    );
   }
 
+  /**
+   * Polls until the listing's product-name window has both changed from
+   * `previousWindow` and settled, then returns it. "The listing's
+   * product-name window is no longer what it was, and has stopped moving"
+   * is also TC-13's own assertion, so it is exposed once rather than
+   * hand-rolled in every spec that needs it (issue #19).
+   */
   async waitForChange(previousWindow: string[]): Promise<string[]> {
     const initialKey = JSON.stringify(previousWindow);
-    let lastNames: string[] = [];
-    let lastKey: string | null = null;
-    let stableReads = 0;
-
-    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-      const currentNames = await this.productNames();
-      const currentKey = JSON.stringify(currentNames);
-      const hasChanged = currentKey !== initialKey;
-
-      if (hasChanged && currentKey === lastKey) {
-        stableReads += 1;
-        if (stableReads >= STABLE_READS_REQUIRED) {
-          return currentNames;
-        }
-      } else {
-        stableReads = 0;
-      }
-
-      lastKey = currentKey;
-      lastNames = currentNames;
-      await this.page.waitForTimeout(POLL_INTERVAL_MS);
-    }
-
-    throw new Error(`Listing did not settle on a new window (last read: ${JSON.stringify(lastNames)})`);
+    return this.pollUntilStable(
+      (window) => JSON.stringify(window) !== initialKey,
+      (lastNames) => `Listing did not settle on a new window (last read: ${JSON.stringify(lastNames)})`,
+    );
   }
 }
