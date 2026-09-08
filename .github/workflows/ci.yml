@@ -12,10 +12,13 @@ on:
     branches: [main]
 
 # Cancel a superseded run on the same PR/branch rather than piling up runs
-# against third-party infrastructure (demoblaze) and api-main.
+# against third-party infrastructure (demoblaze) and api-main. Restricted to
+# pull_request: a push to main is a merge, and two quick merges cancelling
+# the first merge's run would destroy the exact evidence SPEC.md:117 says
+# gets attached to it.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -30,16 +33,19 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install root dependencies
         run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -67,6 +73,12 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
+      # Not wrapped in continue-on-error: summarize-failures.js sets
+      # process.exitCode = 2 only when the run is BROKEN (missing/unparseable
+      # results, or a report describing zero executed tests) - never for a
+      # normal report with failing/flaky tests. That's the one case this job
+      # is allowed to go red on. A broken run is not a test failure, so the
+      # non-gating policy for test failures (SPEC.md:19) stays untouched.
       - name: Summarize failures (by defect id)
         if: always()
         run: |
@@ -74,7 +86,7 @@ jobs:
 
       - name: Upload HTML report and traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report-e2e
           path: |
@@ -90,25 +102,16 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install root dependencies
         run: npm ci
-
-      # api-main is a read-only system under test (never modified - see
-      # CLAUDE.md); this only installs its own node_modules, mirroring
-      # package.json's "pretest" hook, which npm only runs ahead of the
-      # exact script name "test" and therefore does not fire for the
-      # `--project=api` invocation used below.
-      - name: Install api-main dependencies
-        working-directory: api-main
-        run: npm install --no-save --no-audit --no-fund
 
       # No browser install here: the @api project drives Playwright's HTTP
       # request context only, never a browser.
@@ -118,6 +121,16 @@ jobs:
       # API_BASE_URL is left unset here, so usingLocalApi is true - this
       # satisfies issue #11's "the api job starts the local api-main before
       # running" without a separate step.
+      #
+      # `npm run test:api` runs the exact entry point the README tells the
+      # reviewer to use, which triggers package.json's "pretest:api" hook to
+      # install api-main's own node_modules - no hand-copied install step
+      # here. api-main is a read-only system under test (CLAUDE.md), so this
+      # install can't be pinned to a lockfile without modifying it; unlike
+      # the actions above, it resolves fresh every run. Accepted risk: a
+      # breaking transitive release in api-main's dependencies would turn
+      # this job into a BROKEN RUN with no repo change - which, per C1, no
+      # longer goes unnoticed.
       #
       # See the e2e job's identical comment above: this always exits 0 after
       # capturing the real exit code, so the job's outcome is never gated on
@@ -130,11 +143,17 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_NAME: api-results.json
         run: |
           set +e
-          npx playwright test --project=api --reporter=html,json
+          npm run test:api -- --reporter=html,json
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
+      # Not wrapped in continue-on-error: summarize-failures.js sets
+      # process.exitCode = 2 only when the run is BROKEN (missing/unparseable
+      # results, or a report describing zero executed tests) - never for a
+      # normal report with failing/flaky tests. That's the one case this job
+      # is allowed to go red on. A broken run is not a test failure, so the
+      # non-gating policy for test failures (SPEC.md:19) stays untouched.
       - name: Summarize failures (by defect id)
         if: always()
         run: |
@@ -142,7 +161,7 @@ jobs:
 
       - name: Upload HTML report and traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report-api
           path: |

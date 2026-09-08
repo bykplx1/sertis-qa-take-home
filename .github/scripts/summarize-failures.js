@@ -113,7 +113,7 @@ function renderSummary(entries, stats) {
   lines.push(`## Failure summary - ${suiteLabel}`);
   lines.push('');
   lines.push(
-    `${stats.expected} passed, ${entries.length} not passing (of ${stats.total} total).`,
+    `${stats.expected ?? '?'} passed, ${entries.length} not passing (of ${stats.total} total).`,
   );
   lines.push('');
 
@@ -174,6 +174,13 @@ function renderSummary(entries, stats) {
 // deliberately its own heading with its own emoji so it cannot be confused
 // with, or scrolled past as part of, the normal "no failures" case.
 function renderBrokenRun(reason) {
+  // A broken run is not a test failure - the non-gating policy for test
+  // failures (SPEC.md:19) is deliberate and untouched by this. But a broken
+  // run being invisible is a defect in the pipeline itself: this exit code
+  // is what lets the "Summarize failures" step in ci.yml (not wrapped in
+  // continue-on-error) actually fail the job.
+  process.exitCode = 2;
+
   const lines = [];
   lines.push(`## :rotating_light: BROKEN RUN - ${suiteLabel}`);
   lines.push('');
@@ -226,16 +233,41 @@ function main() {
     return;
   }
 
+  // JSON.parse succeeds on plenty of things that aren't a Playwright report:
+  // `null`, a bare number, an array. readJson's caller above only catches a
+  // parse failure, not a successful parse of a non-object - reading `.suites`
+  // off `null` throws past this function's boundary instead of rendering the
+  // broken-run section this whole script exists to guarantee.
+  if (report === null || typeof report !== 'object' || Array.isArray(report)) {
+    writeSummary(
+      renderBrokenRun(
+        `\`${resultsPath}\` parsed but is not a Playwright JSON report object ` +
+          `(got ${report === null ? 'null' : Array.isArray(report) ? 'an array' : typeof report}).`,
+      ),
+    );
+    return;
+  }
+
   const nonPassing = collectNonPassing(report).map((e) => ({
     ...e,
     classification: classify(e),
   }));
 
+  // Guard each field individually rather than gating the whole sum on
+  // `report.stats` existing: a report with a stats object that's missing or
+  // has non-numeric individual fields (e.g. `{}`) previously summed to
+  // `undefined`s and rendered "undefined passed ... (of NaN total)" -
+  // NaN === 0 is false, so that slipped past the zero-tests broken-run check
+  // below instead of being caught by it.
+  const s = report.stats || {};
+  const total =
+    (typeof s.expected === 'number' ? s.expected : 0) +
+    (typeof s.unexpected === 'number' ? s.unexpected : 0) +
+    (typeof s.flaky === 'number' ? s.flaky : 0) +
+    (typeof s.skipped === 'number' ? s.skipped : 0);
   const stats = {
-    total: report.stats && typeof report.stats.expected === 'number'
-      ? report.stats.expected + report.stats.unexpected + report.stats.flaky + report.stats.skipped
-      : nonPassing.length,
-    expected: report.stats ? report.stats.expected : undefined,
+    total,
+    expected: typeof s.expected === 'number' ? s.expected : undefined,
   };
 
   // A results file that exists and parses but describes zero executed tests

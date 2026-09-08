@@ -102,7 +102,7 @@ documented behaviour.
 - **Verification:** static source inspection
 - **Spec reference:** `api-main/swagger.yaml:166-169`, the `404` response example for `/signin`,
   and the identical block in the API Documentation appendix of the original brief
-  (`QA Take-Home-Test.docx.pdf`, repo root).
+  (`docs/QA Take-Home-Test.docx.pdf`).
 - **Location:** `api-main/swagger.yaml:169` — `message: "Sign in success"` under the `404`
   example, versus the actual message the server emits for that case at `api-main/server.js:89`
   — `"message": "User not found"`. The same line appears in the brief's appendix. Stripped of
