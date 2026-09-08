@@ -11,12 +11,15 @@ documented behaviour.
 
 **Verification status**, stated per entry so this register does not overclaim:
 
-- The four `API-` entries were verified by reading `api-main/server.js` against
-  `api-main/swagger.yaml` line for line. `api-main` was not modified (it is a read-only system
-  under test) and, at the time this register was written, these were confirmed by static source
-  inspection rather than by an executed HTTP request against a running instance. The `@api`
-  suite (a later ticket) exercises them live; each entry's repro steps are written as the HTTP
-  request that suite will send.
+- `API-001`, `API-002` and `API-003` were originally verified by reading `api-main/server.js`
+  against `api-main/swagger.yaml` line for line, before the `@api` suite existed. `api-main` was
+  not modified (it is a read-only system under test). They are now **reproduced live**: the
+  `@api` suite (`tests/api/signin.spec.ts`, `tests/api/user.spec.ts`, issue #27) drives each of
+  them over HTTP every run — `AC-15`/`AC-16` for `API-001`, `AC-13`/`AC-14`/`AC-17`/`AC-20` for
+  `API-002`, `AC-10` for `API-003` (`docs/test-cases.md`). `API-004` is the exception: it is a
+  defect in `swagger.yaml`'s own documentation (its `404` example contradicts its own `status`
+  field), which no HTTP request can reproduce — comparing two static passages is the whole test —
+  so it remains verified by static source inspection alone.
 - `WEB-001` through `WEB-008` were identified during design, by reading `SPEC.md`'s "Defects
   identified during design" section and reasoning about demoblaze's documented/expected
   behaviour. They are **design-time assertions, not yet reproduced against the live site** by
@@ -40,16 +43,21 @@ documented behaviour.
 - `API-005`, `API-006` and `API-007` did not exist when the four entries above were written. They
   were assigned once the `@api` suite (issue #27) actually drove HTTP requests against a running
   instance and found behaviour the first four entries did not cover, and are **reproduced live**:
-  confirmed against a local instance on 2026-09-08, both by the suite that carries their id in its
-  test titles and, independently, by this register entry's author re-running the same requests by
-  hand against a freshly started local instance the same day.
+  confirmed against a local instance on 2026-09-08, independently by this register entry's author
+  re-running the same requests by hand against a freshly started local instance the same day.
+  `API-005` and `API-006` also carry their id in the titles of the `tests/api/user.spec.ts` and
+  `tests/api/signin.spec.ts` tests that demonstrate them (`AC-07`–`AC-09`, `AC-18`–`AC-19`).
+  `API-007` does not yet: `tests/api/edge-cases.spec.ts:8` (`AC-21`) carries no id in its title,
+  since assigning one was out of #27's scope — see `API-007`'s own entry.
 
 ## `api-main`
 
 ### API-001 — Signin guard accepts a request with only one credential (OR instead of AND)
 
 - **Severity:** High
-- **Verification:** static source inspection
+- **Verification:** reproduced live — `AC-15` and `AC-16` (`docs/test-cases.md`,
+  `tests/api/signin.spec.ts`) each `POST /signin` with one of the two credentials missing every
+  run. Originally identified by static source inspection, before the `@api` suite existed.
 - **Spec reference:** `api-main/swagger.yaml` documents `/signin`'s request body as taking both
   `phone_no` and `otp`, and its `500` response as "Internal Server Error" — implying an
   incomplete-credentials request should hit that path.
@@ -84,7 +92,10 @@ documented behaviour.
 ### API-002 — `status_code` is documented as a string but emitted as a number
 
 - **Severity:** Medium
-- **Verification:** static source inspection
+- **Verification:** reproduced live — `AC-13`, `AC-14`, `AC-17` and `AC-20` (`docs/test-cases.md`,
+  `tests/api/signin.spec.ts`) each assert `status_code`'s documented `string` type against a live
+  response every run, on the `404`, `404`, `500` and `200` branches respectively. Originally
+  identified by static source inspection, before the `@api` suite existed.
 - **Spec reference:** `api-main/swagger.yaml:87` (`/user/{id}` 400 response) and `:125`, `:157`,
   `:177` (`/signin` 200/404/500 responses) all declare `status_code: { type: string }`, with
   examples quoted as strings (`"400"`, `"200"`, `"404"`, `"500"`).
@@ -103,7 +114,9 @@ documented behaviour.
 ### API-003 — `GET /user/:id` returns OTP and phone number to an unauthenticated caller
 
 - **Severity:** Critical
-- **Verification:** static source inspection
+- **Verification:** reproduced live — `AC-10` (`docs/test-cases.md`, `tests/api/user.spec.ts`)
+  asserts `otp` and `phone_no` are absent from a live, unauthenticated `GET /user/001` every run.
+  Originally identified by static source inspection, before the `@api` suite existed.
 - **Spec reference:** `api-main/swagger.yaml:41-77` documents the `/user/{id}` 200 response
   schema as including `phone_no` and `otp`, but the endpoint carries no authentication
   requirement anywhere in the spec or the implementation — meaning any caller who knows or
@@ -170,6 +183,7 @@ documented behaviour.
     documented `400`.
   None of the three reaches the documented error shape; two crash the request instead, and one
   returns a wrong status with a body indistinguishable from an empty valid record.
+- Demonstrated by `AC-07`, `AC-08` and `AC-09` in `docs/test-cases.md`.
 
 ### API-006 — `POST /signin` compares credentials with loose `==`, so non-string values coerce and match
 
@@ -195,6 +209,7 @@ documented behaviour.
   `001`. JavaScript's `==` coerces `20011893 == "020011893"` and `["020011893"] ==
   "020011893"` (via `Array.prototype.toString`) to `true`, so a client that sends credentials as
   numbers or single-element arrays signs in as though it had sent the correctly typed string.
+- Demonstrated by `AC-18` and `AC-19` in `docs/test-cases.md`.
 
 ### API-007 — Malformed JSON on `POST /signin` returns an HTML stack-trace page instead of a JSON error envelope
 
@@ -205,13 +220,13 @@ documented behaviour.
   time this entry was written its title carries no defect id, since assigning one was out of
   #27's scope and is what this entry now provides — the id should be threaded back into that
   test's title by whoever owns `tests/**` (`tests/**` is not this ticket's to edit).
-- **Spec reference:** `api-main/swagger.yaml:170` — `/signin`'s `500` response is the endpoint's
-  only documented error envelope and is JSON (`{status_code, status, data, message}`); more
-  generally, every one of `/signin`'s three documented responses (`200`, `404`, `500`,
-  `swagger.yaml:116-189`) shares that same JSON envelope shape and a JSON content-type. Swagger
-  does not document a dedicated response for a request-parse failure, so this entry does not
-  claim a specific status code is wrong — only that the response abandons the JSON contract every
-  documented branch of this endpoint shares.
+- **Spec reference:** every one of `/signin`'s three documented responses — `200`
+  (`swagger.yaml:116-149`), `404` (`:150-169`), `500` (`:170-189`) — shares the same JSON error
+  envelope shape (`{status_code, status, data, message}`) and a JSON content-type; there is no
+  documented branch of this endpoint that is not JSON. Swagger does not document a dedicated
+  response for a request-parse failure, so this entry does not claim a specific status code is
+  wrong — only that the response abandons the one property every documented branch of this
+  endpoint shares.
 - **Location:** `api-main/server.js:13` — `app.use(bodyParser.json())` is registered with no
   error-handling middleware after it, so a `JSON.parse` failure inside `body-parser` propagates
   as an unhandled error and falls through to Express's default error handler.
@@ -225,6 +240,7 @@ documented behaviour.
   Expected property name or '}' in JSON at position 1`, file paths through `body-parser` and
   `raw-body`). No `status_code`, `status`, `data` or `message` field exists in the response; a
   client written against `/signin`'s documented envelope cannot parse this response at all.
+- Demonstrated by `AC-21` in `docs/test-cases.md`.
 
 ## demoblaze
 

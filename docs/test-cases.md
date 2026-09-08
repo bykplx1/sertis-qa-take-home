@@ -387,54 +387,58 @@ endpoints and `/signin`, asserted against `api-main/swagger.yaml` rather than ag
 `AC-` (api case), a separate sequence from this document's `TC-` ids, since they cover a
 different system through a different seam (`api-main`'s HTTP boundary, not demoblaze's browser
 UI — `CONTEXT.md`). Each row names the endpoint under test, the precondition the request
-depends on, the response the specification documents, and, where the server's actual response
-diverges from it, the `API-` defect id in `docs/defects.md` that failure demonstrates. The `Test`
-column is the exact title of the `tests/api/*.spec.ts` test that automates the case, so a row and
-a test file line map to each other one for one.
+depends on, the response the specification documents, the status that response gives the test
+(`Pass` or `Fails by design`), and, where it fails, the `API-` defect id in `docs/defects.md`
+that failure demonstrates. The `Test` column holds the test's name as it appears in the suite's
+output, without its trailing `` @api `` tag (`AC-02`'s name also carries its describe-block
+prefix, `GET /user/ids ›`, exactly as the suite prints it). Rows are keyed by that name within
+their file, not by a guaranteed one-for-one line mapping — titles and line numbers can drift as
+the suite changes independently of this document.
 
-Fourteen of the 21 are expected to fail by design: `AC-07`, `AC-08`, `AC-09` (`API-005`),
+Thirteen of the 21 are expected to fail by design: `AC-07`, `AC-08`, `AC-09` (`API-005`),
 `AC-10` (`API-003`), `AC-13`, `AC-14` (`API-002`), `AC-15`, `AC-16` (`API-001`), `AC-17`
-(`API-002`), `AC-18`, `AC-19` (`API-006`), `AC-20` (`API-002`), and `AC-21` (`API-007`). `AC-03`
-deliberately does not check `otp` or `phone_no`'s presence, even though `swagger.yaml:68-71`
-documents them on the `200` schema: asserting they are absent is `AC-10`'s job (`API-003`), and
-asserting they are present would certify that defect as correct, which `SPEC.md` "Assertion
-basis" rules out.
+(`API-002`), `AC-18`, `AC-19` (`API-006`), `AC-20` (`API-002`), and `AC-21` (`API-007`) — matching
+the suite's own verified count, 21 tests, 8 pass, 13 fail (`npm run test:api`, re-run
+2026-09-08). `AC-03` deliberately does not check `otp` or `phone_no`'s presence, even though
+`swagger.yaml:68-71` documents them on the `200` schema: asserting they are absent is `AC-10`'s
+job (`API-003`), and asserting they are present would certify that defect as correct, which
+`SPEC.md` "Assertion basis" rules out.
 
 ### `GET /user/ids`
 
-| AC | Test | Precondition | Expected response | Defect |
-|---|---|---|---|---|
-| AC-01 | `GET /user/ids responds over the wired base url with a JSON array` (`tests/api/smoke.spec.ts:11`) | server reachable at the configured base url | `200`, `content-type: application/json`, body is an array | — |
-| AC-02 | `GET /user/ids › returns every known user id` (`tests/api/user.spec.ts:14`) | the server's two seeded users, ids `"001"` and `"002"` | `200`, JSON array whose contents equal exactly `["001", "002"]` | — |
+| AC | Test | Precondition | Expected response | Status | Defect |
+|---|---|---|---|---|---|
+| AC-01 | `GET /user/ids responds over the wired base url with a JSON array` (`tests/api/smoke.spec.ts:11`) | server reachable at the configured base url | `200`, `content-type: application/json`, body is an array | Pass | — |
+| AC-02 | `GET /user/ids › returns every known user id` (`tests/api/user.spec.ts:14`) | the server's two seeded users, ids `"001"` and `"002"` | `200`, JSON array whose contents equal exactly `["001", "002"]` | Pass | — |
 
 ### `GET /user/:id`
 
-| AC | Test | Precondition | Expected response | Defect |
-|---|---|---|---|---|
-| AC-03 | `known id matches the documented schema and field types` (`user.spec.ts:25`) | `id` = `"001"`, a known user | `200`; `first_name`, `last_name`, `permission` are each typed `string` per `swagger.yaml:60-77` (`otp`/`phone_no` deliberately unchecked — see note above) | — |
-| AC-04 | `id 001 matches its documented first_name, last_name and permission` (`user.spec.ts:56`) | `id` = `"001"` | `200`; `first_name`, `last_name`, `permission` equal the documented seeded values exactly | — |
-| AC-05 | `id 002 matches its documented first_name, last_name and permission` (`user.spec.ts:56`) | `id` = `"002"` | `200`; same, for user `002` | — |
-| AC-06 | `an unknown id ('999') produces the documented error shape and status code` (`user.spec.ts:75`) | `id` = `"999"`, a plain own-property miss on `user_data` | `400`, `{status_code: "400", message: string}` per `swagger.yaml:79-92` | — |
-| AC-07 | `a prototype-chain id ('toString') produces the documented error shape and status code [API-005]` (`user.spec.ts:103`) | `id` = `"toString"`, resolves via the prototype chain rather than as an own key of `user_data` | `400`, documented error shape | `API-005` |
-| AC-08 | `a prototype-chain id ('constructor') produces the documented error shape and status code [API-005]` (`user.spec.ts:103`) | `id` = `"constructor"` | `400`, documented error shape | `API-005` |
-| AC-09 | `a prototype-chain id ('__proto__') produces the documented error shape and status code [API-005]` (`user.spec.ts:103`) | `id` = `"__proto__"` | `400`, documented error shape | `API-005` |
-| AC-10 | `does not return otp and phone_no to an unauthenticated caller [API-003]` (`user.spec.ts:117`) | `id` = `"001"`, no authentication presented | `200`; `otp` and `phone_no` are absent from the response body | `API-003` |
+| AC | Test | Precondition | Expected response | Status | Defect |
+|---|---|---|---|---|---|
+| AC-03 | `known id matches the documented schema and field types` (`user.spec.ts:25`) | `id` = `"001"`, a known user | `200`; `first_name`, `last_name`, `permission` are each typed `string` per `swagger.yaml:60-77` (`otp`/`phone_no` deliberately unchecked — see note above) | Pass | — |
+| AC-04 | `id 001 matches its documented first_name, last_name and permission` (`user.spec.ts:56`) | `id` = `"001"` | `200`; `first_name`, `last_name`, `permission` equal the documented seeded values exactly | Pass | — |
+| AC-05 | `id 002 matches its documented first_name, last_name and permission` (`user.spec.ts:56`) | `id` = `"002"` | `200`; same, for user `002` | Pass | — |
+| AC-06 | `an unknown id ('999') produces the documented error shape and status code` (`user.spec.ts:75`) | `id` = `"999"`, a plain own-property miss on `user_data` | `400`, `{status_code: "400", message: string}` per `swagger.yaml:79-92` | Pass | — |
+| AC-07 | `a prototype-chain id ('toString') produces the documented error shape and status code [API-005]` (`user.spec.ts:103`) | `id` = `"toString"`, resolves via the prototype chain rather than as an own key of `user_data` | `400`, documented error shape | Fails by design | `API-005` |
+| AC-08 | `a prototype-chain id ('constructor') produces the documented error shape and status code [API-005]` (`user.spec.ts:103`) | `id` = `"constructor"` | `400`, documented error shape | Fails by design | `API-005` |
+| AC-09 | `a prototype-chain id ('__proto__') produces the documented error shape and status code [API-005]` (`user.spec.ts:103`) | `id` = `"__proto__"` | `400`, documented error shape | Fails by design | `API-005` |
+| AC-10 | `does not return otp and phone_no to an unauthenticated caller [API-003]` (`user.spec.ts:117`) | `id` = `"001"`, no authentication presented | `200`; `otp` and `phone_no` are absent from the response body | Fails by design | `API-003` |
 
 ### `POST /signin`
 
-| AC | Test | Precondition | Expected response | Defect |
-|---|---|---|---|---|
-| AC-11 | `valid phone_no and otp sign in and return the matching user` (`signin.spec.ts:25`) | body = user `001`'s documented `phone_no`/`otp` | `200`, `status: "Pass"`, `data` matches user `001`'s `id`/`first_name`/`last_name`/`permission`, `data.otp`/`data.phone_no` absent | — |
-| AC-12 | `a second valid user signs in and returns their own identity, not the first user's` (`signin.spec.ts:47`) | body = user `002`'s documented `phone_no`/`otp` | `200`, `status: "Pass"`, `data` matches user `002`'s identity, not user `001`'s | — |
-| AC-13 | `a wrong otp for a known phone_no is rejected [API-002]` (`signin.spec.ts:67`) | body = user `001`'s `phone_no`, an `otp` that does not match | `404`, `status: "Not found"`, `message: "User not found"`, `status_code` typed `string` per `swagger.yaml:157` | `API-002` (`status_code` type only; the `404` envelope itself matches) |
-| AC-14 | `one user's otp presented with another user's phone_no is rejected [API-002]` (`signin.spec.ts:82`) | body = user `001`'s `phone_no`, user `002`'s `otp` — both real, not a matching pair | `404`, same shape as AC-13 | `API-002` (`status_code` type only) |
-| AC-15 | `a request missing otp produces the documented internal-error response [API-001]` (`signin.spec.ts:99`) | body = `{phone_no}` only, `otp` key absent | `500`, `status: "Fail"`, `message: "Internal Server Error"` per `swagger.yaml:170-189` | `API-001` |
-| AC-16 | `a request missing phone_no produces the documented internal-error response [API-001]` (`signin.spec.ts:118`) | body = `{otp}` only, `phone_no` key absent | `500`, same shape as AC-15 | `API-001` |
-| AC-17 | `an empty request body produces the documented internal-error response [API-002]` (`signin.spec.ts:132`) | body = `{}`, neither key present | `500`, `status: "Fail"`, `message: "Internal Server Error"`, `status_code` typed `string` per `swagger.yaml:177` | `API-002` (`status_code` type only; unaffected by `API-001`, since neither arm of the guard's `OR` is true regardless) |
-| AC-18 | `non-string phone_no and otp (numeric coercion) do not sign in [API-006]` (`signin.spec.ts:155`) | body = `{phone_no: 20011893, otp: 123456}` (numeric, matching user `001`'s values under `==` coercion) | `404`, `status: "Not found"` — documented types are `string`; a numeric pair is not a documented match | `API-006` |
-| AC-19 | `non-string phone_no and otp (array coercion) do not sign in [API-006]` (`signin.spec.ts:176`) | body = `{phone_no: ["020011893"], otp: ["123456"]}` (single-element arrays, matching under `==` coercion) | `404`, `status: "Not found"` | `API-006` |
-| AC-20 | `the 200 response's field types match the documented schema, including status_code [API-002]` (`signin.spec.ts:191`) | body = user `001`'s documented `phone_no`/`otp` | `200`; every field (`status_code`, `status`, `message`, `data`, `data.id`, `data.first_name`, `data.last_name`, `data.permission`) typed per `swagger.yaml:122-140` — `status_code` as `string` | `API-002` (`status_code` only; the other seven fields are expected to pass) |
-| AC-21 | `malformed JSON on POST /signin gets a JSON error envelope, not an HTML stack page [API-007]` (`tests/api/edge-cases.spec.ts:8`) | body = the literal string `{bad` (invalid JSON), `content-type: application/json` | `content-type: application/json`; body has `status_code`, `status`, `data`, `message`, each typed per the envelope every documented `/signin` branch shares (`swagger.yaml:116-189`) — no specific status code is pinned, since swagger documents no dedicated request-parse-failure response | `API-007` |
+| AC | Test | Precondition | Expected response | Status | Defect |
+|---|---|---|---|---|---|
+| AC-11 | `valid phone_no and otp sign in and return the matching user` (`signin.spec.ts:25`) | body = user `001`'s documented `phone_no`/`otp` | `200`, `status: "Pass"`, `data` matches user `001`'s `id`/`first_name`/`last_name`/`permission`, `data.otp`/`data.phone_no` absent | Pass | — |
+| AC-12 | `a second valid user signs in and returns their own identity, not the first user's` (`signin.spec.ts:47`) | body = user `002`'s documented `phone_no`/`otp` | `200`, `status: "Pass"`, `data` matches user `002`'s identity, not user `001`'s | Pass | — |
+| AC-13 | `a wrong otp for a known phone_no is rejected [API-002]` (`signin.spec.ts:67`) | body = user `001`'s `phone_no`, an `otp` that does not match | `404`, `status: "Not found"`, `message: "User not found"`, `status_code` typed `string` per `swagger.yaml:157` | Fails by design | `API-002` (`status_code` type only; the `404` envelope itself matches) |
+| AC-14 | `one user's otp presented with another user's phone_no is rejected [API-002]` (`signin.spec.ts:82`) | body = user `001`'s `phone_no`, user `002`'s `otp` — both real, not a matching pair | `404`, same shape as AC-13 | Fails by design | `API-002` (`status_code` type only) |
+| AC-15 | `a request missing otp produces the documented internal-error response [API-001]` (`signin.spec.ts:99`) | body = `{phone_no}` only, `otp` key absent | `500`, `status: "Fail"`, `message: "Internal Server Error"` per `swagger.yaml:170-189` | Fails by design | `API-001` |
+| AC-16 | `a request missing phone_no produces the documented internal-error response [API-001]` (`signin.spec.ts:118`) | body = `{otp}` only, `phone_no` key absent | `500`, same shape as AC-15 | Fails by design | `API-001` |
+| AC-17 | `an empty request body produces the documented internal-error response [API-002]` (`signin.spec.ts:132`) | body = `{}`, neither key present | `500`, `status: "Fail"`, `message: "Internal Server Error"`, `status_code` typed `string` per `swagger.yaml:177` | Fails by design | `API-002` (`status_code` type only; unaffected by `API-001`, since neither arm of the guard's `OR` is true regardless) |
+| AC-18 | `non-string phone_no and otp (numeric coercion) do not sign in [API-006]` (`signin.spec.ts:155`) | body = `{phone_no: 20011893, otp: 123456}` (numeric, matching user `001`'s values under `==` coercion) | `404`, `status: "Not found"` — documented types are `string`; a numeric pair is not a documented match | Fails by design | `API-006` |
+| AC-19 | `non-string phone_no and otp (array coercion) do not sign in [API-006]` (`signin.spec.ts:176`) | body = `{phone_no: ["020011893"], otp: ["123456"]}` (single-element arrays, matching under `==` coercion) | `404`, `status: "Not found"` | Fails by design | `API-006` |
+| AC-20 | `the 200 response's field types match the documented schema, including status_code [API-002]` (`signin.spec.ts:191`) | body = user `001`'s documented `phone_no`/`otp` | `200`; every field (`status_code`, `status`, `message`, `data`, `data.id`, `data.first_name`, `data.last_name`, `data.permission`) typed per `swagger.yaml:122-140` — `status_code` as `string` | Fails by design | `API-002` (`status_code` only; the other seven fields are expected to pass) |
+| AC-21 | `malformed JSON on POST /signin gets a JSON error envelope, not an HTML stack page` (`tests/api/edge-cases.spec.ts:8`) | body = the literal string `{bad` (invalid JSON), `content-type: application/json` | `content-type: application/json`; body has `status_code`, `status`, `data`, `message`, each typed per the envelope every documented `/signin` branch shares (`swagger.yaml:116-189`) — no specific status code is pinned, since swagger documents no dedicated request-parse-failure response | Fails by design | `API-007` (id pending — this test's title does not yet carry it; see `API-007` in `docs/defects.md`) |
 
 ### `GET /signin` — dropped, not carried into this table
 
