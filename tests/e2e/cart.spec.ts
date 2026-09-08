@@ -28,6 +28,7 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   homePage,
   productPage,
   cartPage,
+  listingPage,
   freshAccount,
 }) => {
   await homePage.goto();
@@ -35,7 +36,8 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   await homePage.logIn(freshAccount.username, freshAccount.password);
 
   // Add PRODUCT_A.
-  await homePage.openCategory(CATEGORY);
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
   await homePage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const priceA = await productPage.priceValue();
@@ -44,7 +46,8 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
 
   // Add PRODUCT_B.
   await homePage.goto();
-  await homePage.openCategory(CATEGORY);
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
   await homePage.openProduct(PRODUCT_B);
   await productPage.waitUntilLoaded();
   const priceB = await productPage.priceValue();
@@ -90,6 +93,7 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
   homePage,
   productPage,
   cartPage,
+  listingPage,
   freshAccount,
 }) => {
   // Preconditions: not logged in. An existing account is available to log
@@ -100,7 +104,8 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
   await homePage.signUp(freshAccount.username, freshAccount.password);
 
   // Step 1: while logged out, add one or more products to the cart.
-  await homePage.openCategory(CATEGORY);
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
   await homePage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const priceA = await productPage.priceValue();
