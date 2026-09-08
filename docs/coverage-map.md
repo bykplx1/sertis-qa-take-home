@@ -1,16 +1,15 @@
 # Coverage map: demoblaze's interaction surface
 
-**Status: final.** Drafted by the inventory ticket (#16) of the coverage map (#15) and finalised
-by #21 once the browse/listing coverage it inventoried (#17, #18, #20, #22) landed. Every
-interaction demoblaze exposes is listed once, with what it costs the suite. The open question
-this map originally carried — where auth sits relative to the purchase flow, and whether the nav
-`Home` and `Cart` links belong in scope — is settled; see "Settled: where auth sits relative to
-the purchase flow" and the corrected nav-chrome rows below. Five rows still carry the finer-grained `driven-not-asserted` and `registered defect, not
-asserted` statuses this map introduced specifically to name gaps that
-`automated`/`costed-in-plan-not-automated`/`consciously-excluded` cannot express on their own
-(see "Status vocabulary"); collapsing them into the three broader buckets would lose that
-information rather than complete the map, and none of them changed as a result of this ticket's
-work.
+**Status: final.** This map lists every interaction demoblaze exposes, once, with what it
+currently costs the suite; `automated` and `costed-in-plan-not-automated` rows are grounded
+against the code and the test-plan's task table respectively, while `consciously-excluded` rows
+are this map's own scoping call rather than something the code determines (see "How each row was
+grounded"). The map's original open question — where auth sits relative to the purchase flow — is
+now settled (see "Settled: where auth sits relative to the purchase flow" below), and two
+finer-grained statuses, `driven-not-asserted` and `registered defect, not asserted`, are kept
+rather than collapsed into the three broader ones because they name gaps those three can't (see
+"Status vocabulary"). The full count — 77 interactions across six statuses, nine of them failing
+by design — is in "Counts".
 
 Terms follow `CONTEXT.md`. **TC** ids are cases in `docs/test-cases.md`; **WEB-** ids are entries
 in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test-plan.md`.
@@ -23,8 +22,8 @@ in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test
   through it.
 - **Costed in plan, not automated** rows map to a scoped line in `docs/test-plan.md`'s task
   table.
-- **Consciously excluded** rows are the ones #15 put out of scope: not on the path to buying
-  anything.
+- **Consciously excluded** rows are the ones this map's scoping call put out of scope: not on
+  the path to buying anything.
 - The interaction list itself came from driving the live site with a throwaway Playwright
   script (2026-09-07) and dumping the DOM of the nav, carousel, category list, listing grid,
   pagination controls, product cards, product detail page, cart page, and every modal. Markup
@@ -37,7 +36,7 @@ in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test
 | `automated` | A spec in `tests/e2e/` asserts on this interaction today. |
 | `driven-not-asserted` | A spec exercises this as a navigation step but asserts nothing about it. Counted separately from `automated` because the distinction is the whole point of this map. |
 | `costed-in-plan-not-automated` | Named in a `docs/test-plan.md` task; no test exists. |
-| `consciously-excluded` | Deliberately out of scope per #15; accounted for, not tested. |
+| `consciously-excluded` | Deliberately out of scope by this map's own scoping call; accounted for, not tested. |
 | `automated` (fails by design) | Asserted, and the assertion fails against the live site because demoblaze violates its own intent. Carries a `WEB-` id. |
 | registered defect, not asserted | A known `WEB-` entry lives on this interaction, but no test targets it — usually because it sits below the UI seam `@e2e` is restricted to. |
 
@@ -47,15 +46,15 @@ in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test
 
 | Interaction | Page | In purchase flow | Status | TC | Notes |
 |---|---|---|---|---|---|
-| Brand `PRODUCT STORE` / logo → `index.html` (`#nava`) | all | no | consciously-excluded | — | #15 out of scope. `tests/e2e/smoke.spec.ts` asserts the brand link is *visible*, never clicks it. |
-| `Home` nav link → `index.html` | all | yes | consciously-excluded | — | Ruled out of scope by #22: a plain hyperlink with no application behaviour of its own, and its one interesting property — resetting a category filter — is `TC-13`'s oracle reached through a second door. Every spec reaches home via `page.goto('/')` (`home-page.ts:14`) instead. |
-| `Contact` → `#exampleModal` | all | no | consciously-excluded | — | #15 out of scope. |
-| `About us` → `#videoModal` (video.js player) | all | no | consciously-excluded | — | #15 out of scope. |
+| Brand `PRODUCT STORE` / logo → `index.html` (`#nava`) | all | no | consciously-excluded | — | Out of scope for this map. `tests/e2e/smoke.spec.ts` asserts the brand link is *visible*, never clicks it. |
+| `Home` nav link → `index.html` | all | yes | consciously-excluded | — | Ruled out of scope once auth/nav sat right: a plain hyperlink with no application behaviour of its own, and its one interesting property — resetting a category filter — is `TC-13`'s oracle reached through a second door. Every spec reaches home via `page.goto('/')` (`home-page.ts:14`) instead. |
+| `Contact` → `#exampleModal` | all | no | consciously-excluded | — | Out of scope for this map. |
+| `About us` → `#videoModal` (video.js player) | all | no | consciously-excluded | — | Out of scope for this map. |
 | `Cart` nav link → `cart.html` | `index.html`, `prod.html` | yes | automated (fails by design) | TC-17 | `#cartur` on `index.html`/`prod.html`. **Correction:** this row previously described the link on `cart.html` as the same `#cartur` control; on `cart.html` it is `<a href="#" onclick="showcart()">`, with no `#cartur` id and no navigation, and is out of scope for this row. `CartPage.open()` uses `page.goto('/cart.html')` for its own navigation steps (`cart-page.ts:11-19`), but `TC-17` deliberately clicks this link as the control under test, after a completed purchase — where it demonstrates `WEB-013`: the still-open order modal intercepts the click. |
 | `Cart` nav link (`onclick="showcart()"`, no id, no navigation) | `cart.html` | no | consciously-excluded | — | A same-page refresh of the cart the shopper is already viewing; distinct control from the `#cartur` link above. No application behaviour to assert. |
 | `Log in` link (`#login2`) → `#logInModal` | all | yes | automated | TC-01 | `HomePage.logIn()`. |
 | `Sign up` link (`#signin2`) → `#signInModal` | all | yes | automated | TC-01 | `HomePage.signUp()`. |
-| `Log out` link (`#logout2`, `onclick="logOut()"`) | all | yes, promoted by #16's rule | automated | TC-16 | The one gap in the plan itself: task 6's scope line names account creation, login, duplicate signup and wrong password, and does **not** name log-out. #16 promoted it into the purchase flow as the mirror of `TC-08`, since it is the second place an auth action can change what is in the cart. `TC-16` asserts the cart belongs to the account, not the session: hidden after log-out, restored on logging back in. Passes. |
+| `Log out` link (`#logout2`, `onclick="logOut()"`) | all | yes, promoted by this map's rule | automated | TC-16 | The one gap in the plan itself: task 6's scope line names account creation, login, duplicate signup and wrong password, and does **not** name log-out. This map promoted it into the purchase flow as the mirror of `TC-08`, since it is the second place an auth action can change what is in the cart. `TC-16` asserts the cart belongs to the account, not the session: hidden after log-out, restored on logging back in. Passes. |
 | `Welcome {username}` label (`#nameofuser`) | all | yes | automated | TC-01 | Asserted in `HomePage.logIn()` (`home-page.ts:56`) as the login oracle. |
 | Navbar toggler (`.navbar-toggler`, collapsed viewport) | all | no | costed-in-plan-not-automated | — | Task 13 (mobile). |
 | Footer copyright text | all | no | consciously-excluded | — | Static text, no interaction. |
@@ -64,9 +63,9 @@ in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test
 
 | Interaction | Page | In purchase flow | Status | TC | Notes |
 |---|---|---|---|---|---|
-| Carousel auto-rotation (`data-ride="carousel"`) | home | no | consciously-excluded | — | #15 out of scope. |
-| Carousel `Previous` / `Next` controls | home | no | consciously-excluded | — | #15 out of scope. |
-| Carousel slide indicators (3 `<li data-slide-to>`) | home | no | consciously-excluded | — | #15 out of scope. |
+| Carousel auto-rotation (`data-ride="carousel"`) | home | no | consciously-excluded | — | Out of scope for this map. |
+| Carousel `Previous` / `Next` controls | home | no | consciously-excluded | — | Out of scope for this map. |
+| Carousel slide indicators (3 `<li data-slide-to>`) | home | no | consciously-excluded | — | Out of scope for this map. |
 
 ### Category list (`.list-group`)
 
@@ -145,7 +144,7 @@ assertions needed and could not have been written without.
 | `Month` (`#month`), `Year` (`#year`) | cart | yes | automated | TC-01, TC-06 | Impossible expiry accepted (`WEB-002`, fails by design). |
 | `Purchase` button (`onclick="purchaseOrder()"`) | cart | yes | automated | TC-01–TC-06 | |
 | Inline error label (`#errors`) | cart | yes | costed-in-plan-not-automated | — | Task 9. TC-03/TC-04 assert only that *no confirmation appears*; the message shown to the shopper is never read. |
-| `Close` button / `×` dismiss | cart | no | consciously-excluded | — | #15 out of scope (modal dismiss paths). |
+| `Close` button / `×` dismiss | cart | no | consciously-excluded | — | Out of scope for this map (modal dismiss paths). |
 | Modal state after dismissing a successful purchase's confirmation | cart | yes | automated (fails by design) | TC-17 | `WEB-013`. `#orderModal` is never dismissed: it stays full-viewport with the shopper's name and full card number still in the form, intercepting the whole nav bar, and a second `Purchase` books a duplicate order for a fabricated amount. |
 
 ### Order confirmation (SweetAlert `.sweet-alert`)
@@ -165,7 +164,7 @@ assertions needed and could not have been written without.
 | Username / password fields + `Sign up` button + `Sign up successful.` alert | all | yes | automated | TC-01, TC-07, TC-08 | Handler registered before the click (`home-page.ts:24-39`). |
 | Duplicate username rejected | all | see auth question | costed-in-plan-not-automated | — | Task 6, named explicitly in its scope line. |
 | Blank username / blank password | all | see auth question | costed-in-plan-not-automated | — | Task 6, by implication; not named. |
-| `Close` / `×` dismiss | all | no | consciously-excluded | — | #15 out of scope. |
+| `Close` / `×` dismiss | all | no | consciously-excluded | — | Out of scope for this map. |
 
 ### Log-in modal (`#logInModal`)
 
@@ -182,8 +181,8 @@ assertions needed and could not have been written without.
 
 | Interaction | Page | In purchase flow | Status | TC | Notes |
 |---|---|---|---|---|---|
-| Contact: email / name / message fields + `Send message` (`onclick="send()"`) | all | no | consciously-excluded | — | #15 out of scope. |
-| About us: video.js player (`https://hls.demoblaze.com/index.m3u8`) and its controls | all | no | consciously-excluded | — | #15 out of scope. |
+| Contact: email / name / message fields + `Send message` (`onclick="send()"`) | all | no | consciously-excluded | — | Out of scope for this map. |
+| About us: video.js player (`https://hls.demoblaze.com/index.m3u8`) and its controls | all | no | consciously-excluded | — | Out of scope for this map. |
 
 ## Counts
 
@@ -242,11 +241,11 @@ And it puts these **outside**, remaining `costed-in-plan-not-automated` under ta
 **Log-out was the one row this rule promoted rather than parked, and it shipped as `TC-16`.**
 Logging out is the mirror of TC-08: it is the second place in the site where an auth action can
 change what is in the cart, and demoblaze already has a registered identity-key defect on exactly
-that seam (`WEB-005`: cart keyed by token when adding, by username when emptying). Measured in
-#22: `TC-16` passes — the cart belongs to the account, not the session, and is hidden rather than
-destroyed by logging out. It does not demonstrate `WEB-005`; three completed purchases, two of
-them logged in, all left the cart correctly empty, so the seam #16 promoted on suspicion of a
-defect is the one demoblaze gets right. `WEB-005` stays a registered defect, not asserted, on
+that seam (`WEB-005`: cart keyed by token when adding, by username when emptying). Measured once
+`TC-16` landed: it passes — the cart belongs to the account, not the session, and is hidden rather
+than destroyed by logging out. It does not demonstrate `WEB-005`; three completed purchases, two
+of them logged in, all left the cart correctly empty, so the seam this map promoted on suspicion
+of a defect is the one demoblaze gets right. `WEB-005` stays a registered defect, not asserted, on
 its own row above.
 
 ### Why this line and not the alternatives
@@ -266,7 +265,7 @@ its own row above.
 ## Pagination: observations from the live site, and the rulings they led to
 
 Facts recorded on 2026-09-07 from the throwaway exploration script. `docs/adr/0001-pagination-oracle.md`
-(#18) has since ruled on each: behaviour 2 is `WEB-011` (High), behaviour 3 is `WEB-012`
+has since ruled on each: behaviour 2 is `WEB-011` (High), behaviour 3 is `WEB-012`
 (Medium), behaviour 1 is not a defect, and behaviour 4 (page size) is not assertable. `TC-09`
 through `TC-12` (`tests/e2e/browse.spec.ts`) now automate all five rows in the Pagination table
 above.

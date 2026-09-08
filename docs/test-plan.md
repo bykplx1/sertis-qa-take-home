@@ -43,6 +43,62 @@ recommendation as a costed deliverable (the analysis and mitigation plan) withou
 stand up a demoblaze mirror inside this ten-day window, which would be a substantially larger
 effort than the window allows.
 
+## Entry and exit criteria
+
+**Test environments.** This plan's tasks assume the `@e2e` project as configured in
+`playwright.config.ts:86-113`: Chromium is the default, CI-run environment; Firefox and WebKit are
+configured and runnable locally (task 10) but not wired into CI. The target base url is
+demoblaze itself, overridable via `E2E_BASE_URL` (default `https://www.demoblaze.com`) — there is
+no staging or mirrored environment, per "The case for a controlled test environment" above.
+
+**Entry criteria:**
+
+- The harness (task 1) is scaffolded and `@e2e` runs against a reachable demoblaze before task 3
+  starts; nothing downstream is buildable without it.
+- The test-data strategy (a fresh randomised account per run) is agreed, since demoblaze cannot
+  be seeded with a fixed account and every downstream task depends on that mechanism working.
+- `SPEC.md`'s implementation decisions for this suite — seams, selector strategy, oracles — are
+  settled, since work started against a contested seam would be rebuilt once it is.
+
+**Exit criteria:**
+
+- Every task in the table below is either executed and evidenced (a written deliverable, a
+  landed spec file, or a defect-register entry) or explicitly descoped by the QA lead against
+  the risk table below.
+- Every defect found is recorded in `docs/defects.md` with severity, repro steps, and
+  expected/actual behaviour, and every test that fails by design carries that defect's id in its
+  title — the traceability `SPEC.md`'s "Further Notes" commits to.
+- `npm run test:e2e` runs to completion and the CI `e2e` job reports without erroring. A green
+  run is not required: the by-design failures are the deliverable, not a bug to clear before
+  sign-off (see the README's "Expected failures").
+- Remaining gaps are enumerated, not silent: rows still `costed-in-plan-not-automated` in
+  `docs/coverage-map.md` are the honest remainder the QA lead signs off against, not an implied
+  completeness.
+- Exit is reached on the tenth elapsed day regardless of open defects in demoblaze — this is a
+  fixed-calendar engagement against a system this plan cannot fix, so the calendar ends it, not a
+  bug count reaching zero.
+
+## Risks, mitigations, owners
+
+| Risk | Likelihood | Impact | Mitigation | Owner |
+|---|---|---|---|---|
+| demoblaze changes or degrades mid-engagement — third-party infrastructure that cannot be seeded, reset, or instrumented | High | High: breaks locators or flow assumptions without warning | Text/role-based selectors, a two-retry policy on `@e2e`, and the decay documented in "The case for a controlled test environment" above, accepted rather than denied | Whichever engineer's track currently owns the affected task (tasks 3–9, 11–14 per that section) |
+| CI is deliberately non-blocking (`SPEC.md` "Pipeline"), so a genuine regression could land on `main` unnoticed | Medium | Medium: a real break hides among expected by-design failures | The `e2e` job's summary (`.github/scripts/summarize-failures.js`) names which defect explains each red `@e2e` test; a failure with no matching defect id is visible by inspection rather than buried in a merge that went through anyway | Both engineers, checked at hand-off |
+| A one-line task scope hides real cost — task 3 already did this once | Medium | High: further misses eat into a fixed 20 PD budget with no contingency line | Priority ordering already protects Critical work from a slip (Critical tasks scheduled first per engineer-track); see "Estimate vs. actual" below for the concrete instance, its cost, and what a lead would cut to absorb it — recorded there rather than repeated here | QA lead |
+
+**Defect triage.** New `docs/defects.md` entries are triaged by the QA lead against the same
+Critical/High/Medium/Low scale used in "Estimation basis" above: Critical and High are triaged the
+same working day they're filed (before the next day's task assignments are confirmed), Medium
+within two working days, Low by task 15's end-of-engagement compilation if not sooner. This is the
+same priority ordering that already protects the budget in the risk table above, stated as an SLA
+rather than left implied.
+
+**Roles.** Two QA engineers execute the task table in parallel per the calendar reconciliation
+below; a QA lead makes the prioritisation calls in the risk table above when the fixed budget is
+exceeded and triages defects per the SLA above. The developers who own demoblaze are outside this
+engagement and receive `docs/defects.md` as their queue, not a request for a fix within this
+ten-day window.
+
 ## Tasks
 
 | # | Task | Scope | Priority | Estimate (PD) | Dependencies | Rationale |
@@ -95,14 +151,14 @@ final hand-off, which genuinely is end-of-engagement work.
 
 Task 3's one-line scope — "category navigation, product listing, product detail page" — costed
 at 1.5 PD, is what a QA lead would have read as the browse surface's whole cost. It wasn't. Once
-`docs/coverage-map.md` (#16) inventoried the surface in full, pagination turned out to be five
+`docs/coverage-map.md` inventoried the surface in full, pagination turned out to be five
 further interactions the scope line never named, and a defect oracle for two of them
 (`WEB-011`, `WEB-012`) had to be argued from first principles rather than read off a spec
-(`docs/adr/0001-pagination-oracle.md`, #18) before a test could even be written. Category-narrows-
+(`docs/adr/0001-pagination-oracle.md`) before a test could even be written. Category-narrows-
 listing (`TC-13`–`TC-15`) turned out to need its own oracle work too: no rendered evidence
 anywhere on the site connects a product to a category, so "Laptops shows only laptops" is not an
 assertable claim, and the cases that shipped assert something weaker and harder to design —
-selectivity and self-consistency — instead (#17). None of that is visible in a one-line scope
+selectivity and self-consistency — instead. None of that is visible in a one-line scope
 that reads like a straightforward CRUD-listing check.
 
 **This reconciliation is deliberately left broken, not retrofitted.** The task table above is

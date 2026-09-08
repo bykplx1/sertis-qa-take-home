@@ -13,7 +13,8 @@ that way or is not offered**, which permits hiding or disabling a boundary contr
 only one that looks actionable and then moves the listing wrongly. Neither principle names a
 constant, so both survive a catalogue that changes underneath the suite.
 
-Applied to the four behaviours observed live (issue #16, and the follow-up measurement in #18):
+Applied to the four behaviours observed live (found while inventorying the coverage map, and
+re-measured for this ADR):
 
 | # | Behaviour | Ruling |
 |---|---|---|
@@ -57,10 +58,11 @@ remaining in the DOM while hidden — a real finding, but for the accessibility 
 
 ## Consequences
 
-- Two register entries and their test cases are **drafted in issue #21**, not here, and land in
-  `docs/defects.md` and `docs/test-cases.md` when that ticket runs.
-- The suite's by-design failure count goes from four to six, which makes issue #15's open question
-  about `.github/scripts/summarize-failures.js` concrete.
+- Two register entries and their test cases **landed separately**, not here, in
+  `docs/defects.md` and `docs/test-cases.md`.
+- The suite's by-design failure count went from four to six when these landed. It has since
+  grown to nine as further browse/listing coverage shipped — see `docs/coverage-map.md` for the
+  current figure.
 - The partition principle is stated without constants deliberately, so it is reusable as the
   assertion shape for later listing work.
 - Two terms this argument leans on — **result set** and **page window** — are added to
