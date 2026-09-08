@@ -60,7 +60,25 @@ export class HomePage {
     return this.page.locator('#nameofuser');
   }
 
-  async openCategory(category: Category): Promise<void> {
+  /**
+   * The category links, read from the DOM rather than hardcoded, so a
+   * fourth category added later is picked up automatically (issue #19;
+   * SPEC.md "Selector strategy"). All three share `id="itemc"` (WEB-006);
+   * the sidebar's "CATEGORIES" header carries the same `.list-group-item`
+   * class but a different id (`#cat`), which is what keeps it out of this
+   * list.
+   */
+  async categories(): Promise<string[]> {
+    const texts = await this.page.locator('.list-group-item#itemc').allTextContents();
+    return texts.map((text) => text.trim());
+  }
+
+  /**
+   * `category` is typed as `string`, not the `Category` union above, so a
+   * category read back from `categories()` — including one this suite
+   * does not know about yet — can be opened without a cast (issue #19).
+   */
+  async openCategory(category: Category | string): Promise<void> {
     await this.page.getByRole('link', { name: category, exact: true }).click();
   }
 
