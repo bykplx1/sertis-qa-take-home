@@ -69,10 +69,6 @@ export class HomePage {
     await expect(this.page.getByRole('link', { name: 'Log in', exact: true })).toBeVisible();
   }
 
-  async openProduct(productName: string): Promise<void> {
-    await this.page.getByRole('link', { name: productName, exact: true }).click();
-  }
-
   /**
    * Follows the nav bar's `Cart` link — deliberately different from
    * `CartPage.open()`'s direct `goto('/cart.html')`, which exists

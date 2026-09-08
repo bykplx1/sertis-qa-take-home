@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test } from './fixtures';
 
 // TC-02 through TC-06 in docs/test-cases.md: the unhappy paths through the
 // order form. Reuses the purchase-journey page objects and fixtures
@@ -42,7 +42,7 @@ async function addProductToCart(
 ): Promise<void> {
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_NAME);
+  await listingPage.openProduct(PRODUCT_NAME);
   await productPage.waitUntilLoaded();
   await productPage.addToCart();
 }
@@ -65,7 +65,7 @@ test('TC-02: ordering with an empty cart is prevented — WEB-009 @e2e', async (
   // 1. Open the cart with nothing in it.
   await signUpAndLogIn(homePage, freshAccount);
   await cartPage.open();
-  expect(await cartPage.isEmpty()).toBe(true);
+  await cartPage.assertEmpty();
 
   // 2. Attempt to proceed to place an order.
   await cartPage.placeOrder();

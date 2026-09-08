@@ -11,6 +11,11 @@ const STABLE_READS_REQUIRED = 3;
 const POLL_INTERVAL_MS = 25;
 const MAX_POLL_ATTEMPTS = 200; // ~5s ceiling
 
+// `settleAfterClick()` waits this long before its first read, clearing the
+// 321-702ms stale window outright rather than relying on 3 x 25ms
+// (~75-120ms) of polling, which sits deep inside it (issue #25 E2).
+const STALE_WINDOW_CLEAR_MS = 1_000;
+
 /**
  * The category sidebar, the product grid, and pagination — all on
  * whichever page currently renders them (home, unfiltered or
@@ -110,13 +115,20 @@ export class ListingPage {
     return this.page.locator('#next2').isVisible();
   }
 
+  /** Whether a `Previous` control is offered on the current page window. */
+  async isPreviousOffered(): Promise<boolean> {
+    return this.page.locator('#prev2').isVisible();
+  }
+
   /**
    * Advances to the next page window and returns it once it has settled.
-   * `Next` only, deliberately — this page object has no `previousPage`,
-   * because `Previous` never returns to the prior page: it corrupts the
-   * window by shifting it forward by one product instead (`WEB-011`,
+   * `Next` only, deliberately — this page object has no general
+   * `previousPage` for walking a listing backwards, because `Previous`
+   * never returns to the prior page: it corrupts the window by shifting it
+   * forward by one product instead (`WEB-011`,
    * `docs/adr/0001-pagination-oracle.md`). Enumerating a listing is
-   * therefore forward-only.
+   * therefore forward-only. `clickPrevious()` below exists only for the
+   * case that tests `Previous` itself, not for walking.
    */
   async nextPage(): Promise<string[]> {
     const before = await this.productNames();
@@ -125,15 +137,44 @@ export class ListingPage {
   }
 
   /**
+   * Clicks `Previous` and returns the window once it has genuinely
+   * settled. Exists solely for TC-11 (`WEB-011`, issue #25 E2/E8): reading
+   * on the first 3 stable polls (~75-120ms) sits deep inside the
+   * 321-702ms window the OLD window stays rendered after a click (module
+   * docstring above), so a "no change" reading taken that early would be
+   * indistinguishable from one taken honestly. `settleAfterClick()` waits
+   * the window out first.
+   */
+  async clickPrevious(): Promise<string[]> {
+    await this.page.locator('#prev2').click();
+    return this.settleAfterClick();
+  }
+
+  /**
+   * Opens a product from the current listing window's card link and waits
+   * for the detail page's navigation to commit before returning (issue #25
+   * E9) — moved here from `HomePage`, which had no notion of the page it
+   * was navigating to and left `goBack()` racing this click's dispatch
+   * rather than its commit (E3; TC-18, `WEB-014`).
+   */
+  async openProduct(productName: string): Promise<void> {
+    await this.page.getByRole('link', { name: productName, exact: true }).click();
+    await this.page.waitForURL(/prod\.html/);
+  }
+
+  /**
    * Clicks a category link and returns its settled product-name window, as
    * one operation rather than three calls spread across two page objects
-   * (issue #19 review): capture the current window, click, and wait for
-   * the new one to settle.
+   * (issue #19 review): click, then wait for the window to settle.
+   * Settles on ANY window rather than requiring a change from before the
+   * click (issue #25 E11): if a category filter stopped narrowing the
+   * listing — the fault TC-13 exists to catch — that is for the caller's
+   * own assertion to catch with a readable diff, not for this method to
+   * die on with an opaque "did not settle on a new window" timeout.
    */
   async openCategory(category: string): Promise<string[]> {
-    const before = await this.productNames();
     await this.page.getByRole('link', { name: category, exact: true }).click();
-    return this.waitForChange(before);
+    return this.settleAfterClick();
   }
 
   /**
@@ -144,7 +185,7 @@ export class ListingPage {
    * flip itself is not instantaneous for every card: reading on the first
    * observed difference risks returning a partially-rendered grid.
    * "Acceptable, and has stopped moving" is the sound synchronisation
-   * primitive here, and `waitForChange` and `waitUntilStable` are both
+   * primitive here, and `waitForChange` and `settleAfterClick` are both
    * exactly that shape — they differ only in what "acceptable" means —
    * so the poll itself lives once (issue #19 / issue #20 review) rather
    * than being hand-rolled per case, the same idiom as
@@ -180,26 +221,31 @@ export class ListingPage {
   }
 
   /**
-   * Polls until the listing's product-name window reads the same across
-   * `STABLE_READS_REQUIRED` consecutive checks, then returns it — the
-   * "stopped moving" half of `waitForChange`, exposed on its own for a
-   * case that needs to confirm a window did NOT change after an action
-   * (TC-11, issue #20: `Previous` on the first page should offer no
-   * navigation) rather than one that requires it to.
+   * Waits out the 321-702ms window during which the OLD product-name
+   * window stays rendered after a click (module docstring above), then
+   * polls until the window has stopped moving, and returns whatever window
+   * that turns out to be — changed from before the click, or not. Used by
+   * both `clickPrevious()` and `openCategory()` (issue #25 E2/E11): neither
+   * requires a change to have happened before returning, so a caller whose
+   * own assertion depends on one (TC-11's WEB-011 case; TC-13's
+   * category-narrowing case) fails there, with a readable diff, instead of
+   * inside this method with an opaque timeout.
    */
-  async waitUntilStable(): Promise<string[]> {
+  private async settleAfterClick(): Promise<string[]> {
+    await this.page.waitForTimeout(STALE_WINDOW_CLEAR_MS);
     return this.pollUntilStable(
       () => true,
-      (lastNames) => `Listing did not settle on a stable window (last read: ${JSON.stringify(lastNames)})`,
+      (lastNames) => `Listing did not settle after the click (last read: ${JSON.stringify(lastNames)})`,
     );
   }
 
   /**
    * Polls until the listing's product-name window has both changed from
-   * `previousWindow` and settled, then returns it. "The listing's
-   * product-name window is no longer what it was, and has stopped moving"
-   * is also TC-13's own assertion, so it is exposed once rather than
-   * hand-rolled in every spec that needs it (issue #19).
+   * `previousWindow` and settled, then returns it. Used by `nextPage()`,
+   * where a further page window is only ever offered when there genuinely
+   * is one to move to, so requiring the change is sound there (unlike
+   * `openCategory()`/`clickPrevious()`, issue #25 E11, which settle on any
+   * window instead).
    */
   async waitForChange(previousWindow: string[]): Promise<string[]> {
     const initialKey = JSON.stringify(previousWindow);

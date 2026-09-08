@@ -39,7 +39,7 @@ test('TC-01: sign up, add to cart, place an order, see confirmation @e2e', async
   // 4. Open a product category and select a product from it.
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_NAME);
+  await listingPage.openProduct(PRODUCT_NAME);
 
   // 5. On the product page, confirm its name, price and description are displayed.
   await productPage.waitUntilLoaded();
@@ -86,7 +86,7 @@ test('TC-01: sign up, add to cart, place an order, see confirmation @e2e', async
 
   // Returning to the cart afterwards shows it empty.
   await cartPage.open();
-  expect(await cartPage.isEmpty()).toBe(true);
+  await cartPage.assertEmpty();
 });
 
 // Secondary scenario (issue #8 acceptance criteria: "the anonymous journey
@@ -104,7 +104,7 @@ test('anonymous shopper can add to cart and place an order without an account @e
   await homePage.goto();
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_NAME);
+  await listingPage.openProduct(PRODUCT_NAME);
 
   await productPage.waitUntilLoaded();
   const productPrice = await productPage.priceValue();
@@ -130,5 +130,5 @@ test('anonymous shopper can add to cart and place an order without an account @e
   await confirmation.close();
 
   await cartPage.open();
-  expect(await cartPage.isEmpty()).toBe(true);
+  await cartPage.assertEmpty();
 });

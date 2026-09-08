@@ -82,11 +82,11 @@ test('TC-10: the last page offers no way to page further forward @e2e', async ({
 
 // TC-11: `Previous` returns to the preceding page, and offers nothing on
 // the first page — WEB-011. Two paths in one case. `ListingPage` exposes
-// no `previousPage()` by design (WEB-011 means the control cannot be
-// walked the same safe way `Next` can), so this case reaches it directly
-// — the one place in this suite that does.
+// no general `previousPage()` for walking (WEB-011 means the control
+// cannot be walked the same safe way `Next` can), only `clickPrevious()`
+// and `isPreviousOffered()` for the case that tests the control itself
+// (issue #25 E2/E8).
 test('TC-11: Previous returns to the preceding page, and offers nothing on the first page — WEB-011 @e2e', async ({
-  page,
   homePage,
   listingPage,
 }) => {
@@ -95,11 +95,9 @@ test('TC-11: Previous returns to the preceding page, and offers nothing on the f
   await homePage.goto();
   await listingPage.waitUntilLoaded();
   const firstPage = await listingPage.productNames();
-  const previousControl = page.locator('#prev2');
 
-  if (await previousControl.isVisible()) {
-    await previousControl.click();
-    const afterClick = await listingPage.waitUntilStable();
+  if (await listingPage.isPreviousOffered()) {
+    const afterClick = await listingPage.clickPrevious();
     expect(afterClick).toEqual(firstPage);
   }
 
@@ -109,8 +107,7 @@ test('TC-11: Previous returns to the preceding page, and offers nothing on the f
   await listingPage.waitUntilLoaded();
   const firstPageAgain = await listingPage.productNames();
   await listingPage.nextPage();
-  await previousControl.click();
-  const afterPreviousFromSecondPage = await listingPage.waitUntilStable();
+  const afterPreviousFromSecondPage = await listingPage.clickPrevious();
   expect(afterPreviousFromSecondPage).toEqual(firstPageAgain);
 });
 
@@ -280,7 +277,7 @@ test("TC-16: logging out hides the account's cart, and logging back in restores 
   // Step 1: while logged in, add a product to the cart.
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_NAME);
+  await listingPage.openProduct(PRODUCT_NAME);
   await productPage.waitUntilLoaded();
   const price = await productPage.priceValue();
   await productPage.addToCart();
@@ -297,7 +294,7 @@ test("TC-16: logging out hides the account's cart, and logging back in restores 
   // Step 4: open the cart. Expected result: the anonymous shopper is not
   // shown the account's cart.
   await cartPage.open();
-  expect(await cartPage.isEmpty()).toBe(true);
+  await cartPage.assertEmpty();
 
   // Step 5: log back in with the same account.
   await homePage.goto();
@@ -330,7 +327,7 @@ test('TC-17: after a completed purchase, the order modal closes, the form clears
 
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_NAME);
+  await listingPage.openProduct(PRODUCT_NAME);
   await productPage.waitUntilLoaded();
   await productPage.addToCart();
 
@@ -364,7 +361,7 @@ test('TC-17: after a completed purchase, the order modal closes, the form clears
   // Known to fail: the still-open modal's subtree intercepts pointer
   // events across the whole viewport, so this click times out.
   await homePage.openCartFromNav();
-  expect(await cartPage.isEmpty()).toBe(true);
+  await cartPage.assertEmpty();
 
   // Expected result: a cart the completed order already emptied cannot be
   // ordered from again. Known to fail: the live `Purchase` button is still
@@ -385,7 +382,7 @@ test('TC-18: browser Back from a product opened out of a filtered listing restor
   const [category] = await listingPage.categories();
   const filteredWindow = await listingPage.openCategory(category);
 
-  await homePage.openProduct(filteredWindow[0]);
+  await listingPage.openProduct(filteredWindow[0]);
   await page.goBack();
   await listingPage.waitUntilLoaded();
 
