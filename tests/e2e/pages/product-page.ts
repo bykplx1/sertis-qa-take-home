@@ -1,4 +1,5 @@
 import { type Locator, type Page } from '@playwright/test';
+import { parsePrice } from '../support/price';
 
 /**
  * A single product's detail page. Content is injected into `#tbodyid` by
@@ -27,11 +28,7 @@ export class ProductPage {
   /** The product's price as a number, parsed out of the "$360 *includes tax" display text. */
   async priceValue(): Promise<number> {
     const text = (await this.price.textContent()) ?? '';
-    const match = text.match(/\$([\d,.]+)/);
-    if (!match) {
-      throw new Error(`Could not parse a price out of product page text "${text}"`);
-    }
-    return Number(match[1].replace(/,/g, ''));
+    return parsePrice(text, 'product page');
   }
 
   /**

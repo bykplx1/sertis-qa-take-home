@@ -1,12 +1,11 @@
 import { type Locator, type Page, expect } from '@playwright/test';
 
-export type Category = 'Phones' | 'Laptops' | 'Monitors';
-
 /**
- * The demoblaze chrome present on every page: the nav bar, the sign-up and
- * log-in modals, and the category list. demoblaze reuses `id="itemc"`
- * across all three category links (WEB-006), so navigation here is done by
- * accessible name/role rather than id (SPEC.md "Selector strategy").
+ * The demoblaze chrome present on every page: the nav bar and the sign-up
+ * and log-in modals. The category sidebar and the product grid it filters
+ * live on `ListingPage` instead (issue #19 review) — they share a
+ * synchronisation problem (the stale-window race) that this chrome-only
+ * class never has to deal with.
  */
 export class HomePage {
   constructor(private readonly page: Page) {}
@@ -58,10 +57,6 @@ export class HomePage {
 
   get loggedInUserLabel(): Locator {
     return this.page.locator('#nameofuser');
-  }
-
-  async openCategory(category: Category): Promise<void> {
-    await this.page.getByRole('link', { name: category, exact: true }).click();
   }
 
   async openProduct(productName: string): Promise<void> {

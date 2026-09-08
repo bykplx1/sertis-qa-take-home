@@ -24,6 +24,7 @@ test('TC-01: sign up, add to cart, place an order, see confirmation @e2e', async
   productPage,
   cartPage,
   checkoutModal,
+  listingPage,
   freshAccount,
 }) => {
   // 1. Land on the demoblaze home page.
@@ -36,7 +37,8 @@ test('TC-01: sign up, add to cart, place an order, see confirmation @e2e', async
   await homePage.logIn(freshAccount.username, freshAccount.password);
 
   // 4. Open a product category and select a product from it.
-  await homePage.openCategory(CATEGORY);
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
   await homePage.openProduct(PRODUCT_NAME);
 
   // 5. On the product page, confirm its name, price and description are displayed.
@@ -94,9 +96,11 @@ test('anonymous shopper can add to cart and place an order without an account @e
   productPage,
   cartPage,
   checkoutModal,
+  listingPage,
 }) => {
   await homePage.goto();
-  await homePage.openCategory(CATEGORY);
+  await listingPage.waitUntilLoaded();
+  await listingPage.openCategory(CATEGORY);
   await homePage.openProduct(PRODUCT_NAME);
 
   await productPage.waitUntilLoaded();
