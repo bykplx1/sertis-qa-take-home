@@ -82,10 +82,13 @@ test('TC-09: the pages of the unfiltered listing partition the catalogue @e2e', 
 // reached this page, so asserting it again afterwards is tautological — a
 // regression would surface as a `waitForChange` timeout inside the page
 // object during collection, never as this assertion actually failing.
-// `forceClickNext()` is the independent signal: it forces a click past
-// Playwright's visibility check and confirms the rendered window is
-// unchanged, so a regression here is caught by a readable diff against the
-// captured last window.
+// `forceClickNext()` is the independent signal: a genuine attempt to click
+// past Playwright's visibility check, whose outcome — refused outright, or
+// landed and left the window unchanged — is asserted explicitly rather
+// than collapsed into one silently-caught error (issue #26 review, item
+// 2): a dispatched click that actually moved the listing is what this
+// case exists to catch, and a click that never reached the control at all
+// cannot demonstrate that either way.
 test('TC-10: the last page offers no way to page further forward @e2e', async ({
   homePage,
   listingPage,
@@ -94,8 +97,18 @@ test('TC-10: the last page offers no way to page further forward @e2e', async ({
   const pages = await collectPages(listingPage);
   const lastWindow = pages[pages.length - 1];
 
-  expect(await listingPage.hasNextPage()).toBe(false);
-  expect(await listingPage.forceClickNext()).toEqual(lastWindow);
+  const { dispatched, window } = await listingPage.forceClickNext();
+  if (dispatched) {
+    // The control was reachable enough to accept a forced click. Expected
+    // result: even so, the listing is left unchanged.
+    expect(window).toEqual(lastWindow);
+  } else {
+    // The click never landed at all — refused outright (demoblaze hides
+    // `#next2` via `display: none` here, verified live). Re-confirmed
+    // rather than assumed from the click's failure alone, so a click
+    // refused for an unrelated reason is not mistaken for this.
+    expect(await listingPage.hasNextPage()).toBe(false);
+  }
 });
 
 // TC-11: `Previous` returns to the preceding page, and offers nothing on
@@ -348,7 +361,14 @@ test("TC-16: logging out hides the account's cart, and logging back in restores 
 //      clears its form;
 //   2. after acknowledging, the navigation bar is reachable again;
 //   3. a cart a completed order already emptied cannot be ordered from a
-//      second time.
+//      second time — proved two ways depending on which world the run
+//      lands in (issue #26 review item 1): if the `Purchase` button is
+//      still reachable at all, no confirmation appears for the duplicate
+//      submission; if it is not reachable, there is no live control left
+//      to place a duplicate order from. Neither branch asserts the
+//      register's stronger claim of "a second, different order id" for a
+//      fabricated amount — that would need reading the confirmation's own
+//      details on the defect-present path, which this case does not do.
 // All three are known to fail against the live site (WEB-013): the order
 // modal is never dismissed, its subtree intercepts pointer events across
 // the whole viewport (hiding the nav bar behind a form still holding the
@@ -431,11 +451,30 @@ test.fail(
   async ({ homePage, productPage, cartPage, checkoutModal, listingPage, freshAccount }) => {
     await completedPurchase(homePage, productPage, cartPage, checkoutModal, listingPage, freshAccount);
 
-    // Expected result: a cart the completed order already emptied cannot be
-    // ordered from again. Known to fail: the live `Purchase` button is
-    // still clickable and books a second order for a fabricated amount.
-    await checkoutModal.submit();
-    await checkoutModal.confirmation().assertDoesNotAppear();
+    // An unconditional `submit()` here would time out identically whether
+    // the defect is present (a still-open modal whose Purchase button
+    // books a duplicate order) or fixed (a genuinely closed modal whose
+    // Purchase button is simply unreachable) — the same failure either
+    // way, which would make this test green forever regardless of whether
+    // demoblaze ever fixes WEB-013 (issue #26 review item 1). Distinguish
+    // the two worlds explicitly instead: whether the click landed at all
+    // is itself the signal.
+    const dispatched = await checkoutModal.attemptSubmit();
+
+    if (dispatched) {
+      // The live Purchase button was still reachable and clickable — the
+      // defect's premise. Expected result: even so, no confirmation
+      // appears for the duplicate submission. Known to fail: it does —
+      // the live button books a second order for a fabricated amount.
+      await checkoutModal.confirmation().assertDoesNotAppear();
+    } else {
+      // The Purchase button was not reachable at all — the modal WEB-013
+      // keeps open is genuinely closed. Asserted directly rather than
+      // accepted as silent success, so a click refused for an unrelated
+      // reason is not mistaken for this: a duplicate order is impossible
+      // because there is no live control left to place one from.
+      expect(await checkoutModal.isOpen()).toBe(false);
+    }
   },
 );
 

@@ -59,8 +59,27 @@ export class CheckoutModal {
     if (details.year !== undefined) await this.modal.locator('#year').fill(details.year);
   }
 
-  async submit(): Promise<void> {
-    await this.modal.getByRole('button', { name: 'Purchase', exact: true }).click();
+  async submit(options?: { timeout?: number }): Promise<void> {
+    await this.modal.getByRole('button', { name: 'Purchase', exact: true }).click(options);
+  }
+
+  /**
+   * Attempts `submit()` within a bounded timeout and reports whether the
+   * click actually landed, instead of letting a click on an unreachable
+   * button throw uncaught. Exists for TC-17c (`WEB-013`, issue #26 review
+   * item 1): once the order modal genuinely closes (the defect fixed), its
+   * `Purchase` button becomes unreachable, and an unconditional `submit()`
+   * would still time out on it — the *same* failure as while the defect is
+   * present, which defeats `test.fail()`'s purpose of turning red only
+   * once the defect is gone. Distinguishing "the click landed" from "the
+   * button was unreachable" gives the caller two genuinely different,
+   * falsifiable outcomes to assert on.
+   */
+  async attemptSubmit(timeout = 5_000): Promise<boolean> {
+    return this.submit({ timeout }).then(
+      () => true,
+      () => false,
+    );
   }
 
   /**
