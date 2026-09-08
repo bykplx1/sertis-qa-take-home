@@ -22,8 +22,22 @@ const MAX_POLL_ATTEMPTS = 60; // ~15s ceiling
 export class CartPage {
   constructor(private readonly page: Page) {}
 
+  /**
+   * Navigates to the cart page and waits for its `/viewcart` fetch to
+   * resolve — the request cart.js issues unconditionally on document ready,
+   * whether or not the cart holds items — before returning. Registered
+   * before the `goto` so a response that lands early is not missed (the
+   * same before-the-triggering-action shape as the dialog handlers in
+   * `home-page.ts`/`product-page.ts`). This is what makes `assertEmpty()`
+   * below honest: by the time `open()` returns, an empty cart's zero rows
+   * is its true, settled state, not a still-loading page read too early.
+   */
   async open(): Promise<void> {
+    const viewCartLoaded = this.page.waitForResponse(
+      (response) => response.url().includes('/viewcart') && response.request().method() === 'POST',
+    );
     await this.page.goto('/cart.html');
+    await viewCartLoaded;
   }
 
   rowFor(productName: string): Locator {
@@ -38,8 +52,39 @@ export class CartPage {
     return this.page.locator('#tbodyid tr').count();
   }
 
-  async isEmpty(): Promise<boolean> {
-    return (await this.itemCount()) === 0;
+  /**
+   * Asserts the cart holds no items. `open()` waiting for the `/viewcart`
+   * response closes one race (a read before the fetch even started
+   * reporting zero rows by default) but not the next one: rows are still
+   * appended one at a time in that response's own success callback, so a
+   * single `toHaveCount(0)` check can pass on its very first poll, at the
+   * exact moment a non-empty cart's rows are mid-append and about to
+   * become non-zero — the same shape of race `stableTotal()` below closes
+   * for the total. This polls the row count to the same
+   * `STABLE_READS_REQUIRED`-consecutive-reads stability before accepting
+   * zero, then asserts once more for a readable failure message if it
+   * never gets there.
+   */
+  async assertEmpty(): Promise<void> {
+    const rows = this.page.locator('#tbodyid tr');
+    let stableReads = 0;
+
+    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+      const count = await rows.count();
+
+      if (count === 0) {
+        stableReads += 1;
+        if (stableReads >= STABLE_READS_REQUIRED) {
+          return;
+        }
+      } else {
+        stableReads = 0;
+      }
+
+      await this.page.waitForTimeout(POLL_INTERVAL_MS);
+    }
+
+    await expect(rows).toHaveCount(0, { timeout: 0 });
   }
 
   async removeItem(productName: string): Promise<void> {

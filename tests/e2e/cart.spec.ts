@@ -38,7 +38,7 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   // Add PRODUCT_A.
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_A);
+  await listingPage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const priceA = await productPage.priceValue();
   const messageA = await productPage.addToCart();
@@ -48,7 +48,7 @@ test('TC-07: several products appear in the cart, the total is their sum, and re
   await homePage.goto();
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_B);
+  await listingPage.openProduct(PRODUCT_B);
   await productPage.waitUntilLoaded();
   const priceB = await productPage.priceValue();
   const messageB = await productPage.addToCart();
@@ -106,7 +106,7 @@ test('TC-08: adding to cart while logged out, then logging in, preserves the car
   // Step 1: while logged out, add one or more products to the cart.
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_A);
+  await listingPage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const priceA = await productPage.priceValue();
   const messageA = await productPage.addToCart();
@@ -164,7 +164,7 @@ test('TC-19: the add-to-cart confirmation reads the same for anonymous and logge
   await homePage.goto();
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_A);
+  await listingPage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const anonymousMessage = await productPage.addToCart();
 
@@ -172,7 +172,7 @@ test('TC-19: the add-to-cart confirmation reads the same for anonymous and logge
   await logInAs(homePage, freshAccount);
   await listingPage.waitUntilLoaded();
   await listingPage.openCategory(CATEGORY);
-  await homePage.openProduct(PRODUCT_A);
+  await listingPage.openProduct(PRODUCT_A);
   await productPage.waitUntilLoaded();
   const loggedInMessage = await productPage.addToCart();
 
