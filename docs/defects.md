@@ -11,12 +11,15 @@ documented behaviour.
 
 **Verification status**, stated per entry so this register does not overclaim:
 
-- The four `API-` entries were verified by reading `api-main/server.js` against
-  `api-main/swagger.yaml` line for line. `api-main` was not modified (it is a read-only system
-  under test) and, at the time this register was written, these were confirmed by static source
-  inspection rather than by an executed HTTP request against a running instance. The `@api`
-  suite (a later ticket) exercises them live; each entry's repro steps are written as the HTTP
-  request that suite will send.
+- `API-001`, `API-002` and `API-003` were originally verified by reading `api-main/server.js`
+  against `api-main/swagger.yaml` line for line, before the `@api` suite existed. `api-main` was
+  not modified (it is a read-only system under test). They are now **reproduced live**: the
+  `@api` suite (`tests/api/signin.spec.ts`, `tests/api/user.spec.ts`, issue #27) drives each of
+  them over HTTP every run — `AC-15`/`AC-16` for `API-001`, `AC-13`/`AC-14`/`AC-17`/`AC-20` for
+  `API-002`, `AC-10` for `API-003` (`docs/test-cases.md`). `API-004` is the exception: it is a
+  defect in `swagger.yaml`'s own documentation (its `404` example contradicts its own `status`
+  field), which no HTTP request can reproduce — comparing two static passages is the whole test —
+  so it remains verified by static source inspection alone.
 - `WEB-001` through `WEB-008` were identified during design, by reading `SPEC.md`'s "Defects
   identified during design" section and reasoning about demoblaze's documented/expected
   behaviour. They are **design-time assertions, not yet reproduced against the live site** by
@@ -37,13 +40,24 @@ documented behaviour.
   (`/added/i`) to distinguish the two wordings it claims differ. It is now **reproduced live** by
   `TC-19`, which compares the two states' messages to each other rather than certifying either as
   correct.
+- `API-005`, `API-006` and `API-007` did not exist when the four entries above were written. They
+  were assigned once the `@api` suite (issue #27) actually drove HTTP requests against a running
+  instance and found behaviour the first four entries did not cover, and are **reproduced live**:
+  confirmed against a local instance on 2026-09-08, independently by this register entry's author
+  re-running the same requests by hand against a freshly started local instance the same day.
+  `API-005` and `API-006` also carry their id in the titles of the `tests/api/user.spec.ts` and
+  `tests/api/signin.spec.ts` tests that demonstrate them (`AC-07`–`AC-09`, `AC-18`–`AC-19`).
+  `API-007` does not yet: `tests/api/edge-cases.spec.ts:8` (`AC-21`) carries no id in its title,
+  since assigning one was out of #27's scope — see `API-007`'s own entry.
 
 ## `api-main`
 
 ### API-001 — Signin guard accepts a request with only one credential (OR instead of AND)
 
 - **Severity:** High
-- **Verification:** static source inspection
+- **Verification:** reproduced live — `AC-15` and `AC-16` (`docs/test-cases.md`,
+  `tests/api/signin.spec.ts`) each `POST /signin` with one of the two credentials missing every
+  run. Originally identified by static source inspection, before the `@api` suite existed.
 - **Spec reference:** `api-main/swagger.yaml` documents `/signin`'s request body as taking both
   `phone_no` and `otp`, and its `500` response as "Internal Server Error" — implying an
   incomplete-credentials request should hit that path.
@@ -57,11 +71,31 @@ documented behaviour.
   `otp`) enter the matching loop. No user matches on the missing field, so the response is `404`
   `"status": "Not found"`, `"message": "User not found"` — the wrong documented response for
   partial input.
+- **Why 500, not 400 or 404, is the intended response for one credential missing:**
+  `swagger.yaml:107-115` documents `/signin`'s request body with `phone_no` and `otp` as
+  properties but marks neither `required`, so the schema itself gives no basis for calling a
+  one-field body malformed — there is no OpenAPI constraint it violates, which rules out `400`:
+  this endpoint documents no `400` response at all, and nothing in the spec ties an incomplete
+  body to that status. `404` is also the wrong fit: it is documented as the response to a
+  well-formed pair of credentials that does not match any account (`swagger.yaml:150-169`,
+  `"status": "Not found"`), which presupposes both fields were present to compare in the first
+  place. A body missing one of the two was never in a position to "not match" — there is nothing
+  to compare `undefined` against a stored `phone_no` or `otp` and call it a considered non-match,
+  as opposed to a request the endpoint could not evaluate at all. That leaves `500`, which is
+  where `server.js:59`'s own `else` branch already sits, guarding the case where neither field is
+  present. Extending that guard to "at least one of the two is missing" is the only reading
+  consistent with the endpoint needing both credentials simultaneously to attempt a signin: a
+  request that cannot supply enough information to run the comparison is a precondition failure
+  on the server's side, which is what the documented `"Internal Server Error"` message names,
+  not a client-side shape violation (`400`) and not a completed, unsuccessful lookup (`404`).
 
 ### API-002 — `status_code` is documented as a string but emitted as a number
 
 - **Severity:** Medium
-- **Verification:** static source inspection
+- **Verification:** reproduced live — `AC-13`, `AC-14`, `AC-17` and `AC-20` (`docs/test-cases.md`,
+  `tests/api/signin.spec.ts`) each assert `status_code`'s documented `string` type against a live
+  response every run, on the `404`, `404`, `500` and `200` branches respectively. Originally
+  identified by static source inspection, before the `@api` suite existed.
 - **Spec reference:** `api-main/swagger.yaml:87` (`/user/{id}` 400 response) and `:125`, `:157`,
   `:177` (`/signin` 200/404/500 responses) all declare `status_code: { type: string }`, with
   examples quoted as strings (`"400"`, `"200"`, `"404"`, `"500"`).
@@ -80,7 +114,9 @@ documented behaviour.
 ### API-003 — `GET /user/:id` returns OTP and phone number to an unauthenticated caller
 
 - **Severity:** Critical
-- **Verification:** static source inspection
+- **Verification:** reproduced live — `AC-10` (`docs/test-cases.md`, `tests/api/user.spec.ts`)
+  asserts `otp` and `phone_no` are absent from a live, unauthenticated `GET /user/001` every run.
+  Originally identified by static source inspection, before the `@api` suite existed.
 - **Spec reference:** `api-main/swagger.yaml:41-77` documents the `/user/{id}` 200 response
   schema as including `phone_no` and `otp`, but the endpoint carries no authentication
   requirement anywhere in the spec or the implementation — meaning any caller who knows or
@@ -119,6 +155,92 @@ documented behaviour.
   its own `status` field and the server's real `404` message (`"User not found"`). This is a
   defect in the documentation itself, not the server's runtime behaviour, and it reaches the
   candidate through both copies of that documentation.
+
+### API-005 — `GET /user/:id` walks the prototype chain instead of checking `user_data`'s own keys
+
+- **Severity:** High
+- **Verification:** reproduced live against a local instance — confirmed by issue #27 and
+  independently re-confirmed by this register entry's author, both on 2026-09-08.
+- **Spec reference:** `api-main/swagger.yaml:79-92` documents `400` and a JSON error body
+  (`{status_code: "400", message: string}`) for any `id` that is not a valid user id, with no
+  carve-out for a particular class of invalid id.
+- **Location:** `api-main/server.js:43` — `if (id in user_data)` uses the `in` operator, which
+  resolves inherited properties as well as `user_data`'s own keys, so any name that exists on
+  `Object.prototype` matches even though it was never one of the two seeded user records.
+- **Steps to reproduce:** `GET /user/toString`, `GET /user/constructor`, `GET /user/__proto__`.
+- **Expected behaviour:** none of the three is a valid user id (`user_data` only has own keys
+  `"001"` and `"002"`), so each should produce the documented `400` JSON error response.
+- **Actual behaviour:** confirmed live, 2026-09-08, against a local instance:
+  - `GET /user/toString` → `500 Internal Server Error`, `text/html` — an Express stack-trace
+    page. `toString` resolves to `Object.prototype.toString`, a function; `server.js:44-45`
+    passes it to `res.send(data)`, which throws (`TypeError [ERR_INVALID_ARG_TYPE]` in
+    `Buffer.from`, uncaught) instead of reaching either the `200` or `400` branch.
+  - `GET /user/constructor` → `500 Internal Server Error`, `text/html`, same cause
+    (`Object.prototype.constructor`).
+  - `GET /user/__proto__` → `200 OK`, `application/json`, body `{}` — `user_data.__proto__`
+    resolves to `Object.prototype` itself, so the truthy `in` check succeeds and `res.send(data)`
+    serialises an object with no own enumerable properties, an undocumented `200` in place of the
+    documented `400`.
+  None of the three reaches the documented error shape; two crash the request instead, and one
+  returns a wrong status with a body indistinguishable from an empty valid record.
+- Demonstrated by `AC-07`, `AC-08` and `AC-09` in `docs/test-cases.md`.
+
+### API-006 — `POST /signin` compares credentials with loose `==`, so non-string values coerce and match
+
+- **Severity:** Medium
+- **Verification:** reproduced live against a local instance — confirmed by issue #27 and
+  independently re-confirmed by this register entry's author, both on 2026-09-08.
+- **Spec reference:** `api-main/swagger.yaml:109-112` types both `phone_no` and `otp` as
+  `string` in `/signin`'s request body schema.
+- **Location:** `api-main/server.js:63` — `if ((body.phone_no == data.phone_no) && (body.otp ==
+  data.otp))` uses `==`, so a numeric or array-valued credential is coerced to a string before
+  comparison rather than rejected as the wrong type.
+- **Steps to reproduce:** `POST /signin` with `{"phone_no": 20011893, "otp": 123456}` (numeric,
+  and note the leading zero from the documented `"020011893"` is dropped — only survivable
+  because of the loose comparison); separately, `POST /signin` with `{"phone_no":
+  ["020011893"], "otp": ["123456"]}` (single-element arrays).
+- **Expected behaviour:** credentials typed as anything other than the documented `string` do
+  not match a stored `string` value; per the documented contract this is indistinguishable from
+  any other non-matching credential pair, so both requests should produce the `404` `"Not
+  found"` response.
+- **Actual behaviour:** confirmed live, 2026-09-08, against a local instance — both requests
+  return `200` `{"status_code":200,"status":"Pass","data":{"id":"001","first_name":"John",
+  "last_name":"Doe","permission":"admin"},"message":"Sign in success"}`, signing in as user
+  `001`. JavaScript's `==` coerces `20011893 == "020011893"` and `["020011893"] ==
+  "020011893"` (via `Array.prototype.toString`) to `true`, so a client that sends credentials as
+  numbers or single-element arrays signs in as though it had sent the correctly typed string.
+- Demonstrated by `AC-18` and `AC-19` in `docs/test-cases.md`.
+
+### API-007 — Malformed JSON on `POST /signin` returns an HTML stack-trace page instead of a JSON error envelope
+
+- **Severity:** Medium
+- **Verification:** reproduced live against a local instance — confirmed by issue #27 and
+  independently re-confirmed by this register entry's author, both on 2026-09-08. Assigned by
+  this ticket (#28). `tests/api/edge-cases.spec.ts:8` is the test that demonstrates it; at the
+  time this entry was written its title carries no defect id, since assigning one was out of
+  #27's scope and is what this entry now provides — the id should be threaded back into that
+  test's title by whoever owns `tests/**` (`tests/**` is not this ticket's to edit).
+- **Spec reference:** every one of `/signin`'s three documented responses — `200`
+  (`swagger.yaml:116-149`), `404` (`:150-169`), `500` (`:170-189`) — shares the same JSON error
+  envelope shape (`{status_code, status, data, message}`) and a JSON content-type; there is no
+  documented branch of this endpoint that is not JSON. Swagger does not document a dedicated
+  response for a request-parse failure, so this entry does not claim a specific status code is
+  wrong — only that the response abandons the one property every documented branch of this
+  endpoint shares.
+- **Location:** `api-main/server.js:13` — `app.use(bodyParser.json())` is registered with no
+  error-handling middleware after it, so a `JSON.parse` failure inside `body-parser` propagates
+  as an unhandled error and falls through to Express's default error handler.
+- **Steps to reproduce:** `POST /signin` with header `Content-Type: application/json` and body
+  `{bad` (invalid JSON).
+- **Expected behaviour:** the response is JSON, matching the envelope shape every documented
+  `/signin` branch shares (`status_code`, `status`, `data`, `message`), so a client parsing any
+  `/signin` response the same way does not need a special case for this one.
+- **Actual behaviour:** confirmed live, 2026-09-08, against a local instance — `400 Bad Request`,
+  `text/html`, Express's default error page, containing a full stack trace (`SyntaxError:
+  Expected property name or '}' in JSON at position 1`, file paths through `body-parser` and
+  `raw-body`). No `status_code`, `status`, `data` or `message` field exists in the response; a
+  client written against `/signin`'s documented envelope cannot parse this response at all.
+- Demonstrated by `AC-21` in `docs/test-cases.md`.
 
 ## demoblaze
 
