@@ -12,11 +12,13 @@ recorded in `docs/defects.md`, **result set** is the products a listing is curre
 
 A case expected to fail carries the `WEB-` defect id it demonstrates. Two cases below were known
 at design time to be expected to fail because demoblaze performs no such validation: `TC-05` and
-`TC-06`. Their defect ids assume `docs/defects.md` numbers demoblaze's card-and-expiry defects
-`WEB-001` (any card value accepted) and `WEB-002` (impossible expiry accepted), in the order
-those defects are listed in `SPEC.md`'s "Defects identified during design" section — the
-register is being built in a parallel ticket; if its numbering lands differently, these two ids
-should be updated to match rather than the register renumbered to match this document.
+`TC-06`. Their defect ids match `docs/defects.md`'s numbering for demoblaze's card-and-expiry
+defects, `WEB-001` (any card value accepted) and `WEB-002` (impossible expiry accepted), in the
+order those defects are listed in `SPEC.md`'s "Defects identified during design" section. The
+register and this document were built by separate tickets but landed on the same numbering, so
+this is stated as fact, not as a provisional mapping still to be confirmed — the interesting part
+is the distinction the next two paragraphs draw, between defects anticipated during design and
+defects found only once the suite drove a browser against the live site.
 
 Two further cases, `TC-02` and `TC-08`, were written from intended behaviour at design time and
 only found to fail once the `@e2e` suite actually drove a browser against the live site — neither
@@ -28,11 +30,15 @@ and `WEB-002` up front.
 
 `TC-09` onward cover the browse and listing surface, added once `docs/adr/0001-pagination-oracle.md`
 settled a pagination oracle and the remaining category, cart-identity and post-purchase-navigation
-cases were designed on top of it. Five of them are expected to fail by design: `TC-11`
-(`WEB-011`), `TC-12` (`WEB-012`), `TC-17` (`WEB-013`), `TC-18` (`WEB-014`), and `TC-19`
-(`WEB-007`, added once the existing `/added/i` assertion was found too loose to demonstrate it).
-Nine cases are therefore expected to fail by design in total: `TC-02`, `TC-05`, `TC-06`, `TC-08`,
-`TC-11`, `TC-12`, `TC-17`, `TC-18`, and `TC-19`.
+cases were designed on top of it. None of these was anticipated at design time either — see
+`ASSUMPTIONS.md`'s "Six `@e2e` failures were not anticipated at design time" note. Seven of them
+are expected to fail by design: `TC-11` (`WEB-011`), `TC-12` (`WEB-012`), `TC-17`, `TC-18` and
+`TC-19` (`WEB-013` — originally designed as one case, split into three so each of the defect's
+three symptoms is independently exercised and reported; see `TC-17`'s note below), `TC-20`
+(`WEB-014`), and `TC-21` (`WEB-007`, added once the existing `/added/i` assertion was found too
+loose to demonstrate it). Eleven cases are therefore expected to fail by design in total: `TC-02`,
+`TC-05`, `TC-06`, `TC-08`, `TC-11`, `TC-12`, `TC-17`, `TC-18`, `TC-19`, `TC-20`, and `TC-21` —
+across nine distinct defects, since `WEB-013` spans three cases.
 
 Category filtering asserts that the listing is **selective and self-consistent**, never that it
 is **semantically correct**: no rendered evidence anywhere in demoblaze — not the listing card,
@@ -312,39 +318,77 @@ contains exactly the items added in step 1, at the same prices: logging out hid 
 not destroy it. This case is not to be read as demonstrating `WEB-005`; the cart-clearing seam
 `WEB-005` describes did not reproduce when checked alongside it.
 
-## TC-17 — After a completed purchase, the order modal closes, the form clears, and the order cannot be repeated — `WEB-013`
+## TC-17, TC-18, TC-19 — After a completed purchase, the order modal closes, the form clears, the nav bar is reachable, and the order cannot be repeated — `WEB-013`
 
-**Filed under browse, not checkout-validation.** This is a checkout/order-modal case, but it lands
-in `tests/e2e/browse.spec.ts` alongside `TC-09`–`TC-18` rather than in
+**Originally one case, split into three.** A single test bundling all three claims below only ever
+reached the first `expect`: once it failed, the nav-bar and duplicate-order assertions never
+executed, so a run would have been credited with reproducing all three symptoms of `WEB-013` —
+including a second, different order id for a fabricated amount — the moment the first assertion
+happened to fail for any reason. `TC-17`, `TC-18` and `TC-19` below are the three independent
+cases that replaced it, each completing its own purchase so each symptom is actually exercised and
+separately reported. `TC-19`'s oracle is narrower than the bundled case's original claim: it does
+not read the duplicate order's id or amount on the defect-present path, only whether a duplicate
+submission is accepted at all — see its "Known to fail" note and `docs/defects.md`'s `WEB-013`
+entry for what the register can and cannot credit an automated run with proving.
+
+**Filed under browse, not checkout-validation.** These are checkout/order-modal cases, but they
+land in `tests/e2e/browse.spec.ts` alongside `TC-09`–`TC-20` rather than in
 `tests/e2e/checkout-validation.spec.ts` next to `TC-02`–`TC-06`. There is no fixture dependency
-forcing that: `checkout-validation.spec.ts` already declares `listingPage` for `TC-03`, and step 3
-of this case reaches the cart via `homePage.openCartFromNav()` (`tests/e2e/browse.spec.ts:366`), a
-`homePage` method, not a `listingPage` one. The filing is historical: the ticket that added the
-browse/listing surface batched this case in alongside it because `docs/coverage-map.md` ties it to
-the nav-chrome `Cart` link row it also demonstrates, not because either spec file needed it there.
+forcing that: `checkout-validation.spec.ts` already declares `listingPage` for `TC-03`, and each
+case reaches the cart via `homePage.openCartFromNav()` (`tests/e2e/browse.spec.ts`), a `homePage`
+method, not a `listingPage` one. The filing is historical: the ticket that added the browse/listing
+surface batched the original case in alongside it because `docs/coverage-map.md` ties it to the
+nav-chrome `Cart` link row it also demonstrates, not because either spec file needed it there.
 
-**Preconditions:** logged in with a valid account. A product is in the cart. The order form is
-open and filled with valid-looking values.
+**Shared preconditions:** logged in with a valid account. A product is added to the cart, the
+order form is opened and filled with valid-looking values, the order is submitted, and the
+confirmation is dismissed — this shared setup is what each of the three cases below builds on.
 
-**Steps:**
+### TC-17 — Acknowledging the purchase confirmation closes the order modal and clears its form
 
-1. Submit the order and note the confirmation.
-2. Dismiss the confirmation.
-3. Attempt to reach the cart from the `Cart` link in the navigation bar.
-4. Submit the order a second time.
+**Steps:** complete the shared preconditions above, then note the state of the order modal and
+its fields.
 
 **Expected result:** dismissing the confirmation closes the order modal and clears the form,
-which held the shopper's name and full card number. With the modal gone, the shopper can reach
-the rest of the site — the nav `Cart` link works and shows the now-empty cart. The order cannot
-be submitted a second time from a cart the first order already emptied.
+which held the shopper's name and full card number.
 
 **Known to fail:** the order modal is never dismissed. It stays open, full-viewport, with the
-form still populated, and its subtree intercepts pointer events across the whole viewport, so
-the nav bar is unreachable behind it. Submitting the order a second time is accepted and books a
-duplicate order for a fabricated amount. This case is written from intended behaviour and fails
-by design, demonstrating `WEB-013`.
+form still populated. This case is written from intended behaviour and fails by design,
+demonstrating `WEB-013`.
 
-## TC-18 — Browser Back from a product opened out of a filtered listing restores that listing — `WEB-014`
+### TC-18 — After a completed purchase, the navigation bar is reachable again
+
+**Steps:** complete the shared preconditions above, then attempt to reach the cart from the
+`Cart` link in the navigation bar.
+
+**Expected result:** with the modal gone, the shopper can reach the rest of the site — the nav
+`Cart` link works and shows the now-empty cart.
+
+**Known to fail:** the still-open modal's subtree intercepts pointer events across the whole
+viewport, so the nav bar is unreachable behind it and this click times out. This case is written
+from intended behaviour and fails by design, demonstrating `WEB-013`.
+
+### TC-19 — A cart already emptied by a completed order cannot be ordered from a second time
+
+**Steps:** complete the shared preconditions above, then attempt to submit the order a second
+time. Whether the `Purchase` button is reachable at all is itself part of what this case checks —
+an unconditional second submission would time out identically whether the defect is present (a
+still-open modal whose `Purchase` button books a duplicate order) or fixed (a genuinely closed
+modal whose button is simply unreachable), which would make the case pass either way and prove
+nothing.
+
+**Expected result:** if the `Purchase` button is reachable, submitting it a second time produces
+no order confirmation, since the cart the first order emptied has nothing left to order. If it is
+not reachable, there is no live control left to place a duplicate order from.
+
+**Known to fail:** the live `Purchase` button is reachable and accepts a second submission,
+booking a duplicate order. This case's oracle stops at "a duplicate submission is accepted or
+refused" — it does not read the duplicate order's id or its amount. That the second order carries
+a different id and a fabricated amount unrelated to the cart is established separately, by the
+throwaway exploration probes `docs/defects.md`'s `WEB-013` entry cites, not by this case. This
+case is written from intended behaviour and fails by design, demonstrating `WEB-013`.
+
+## TC-20 — Browser Back from a product opened out of a filtered listing restores that listing — `WEB-014`
 
 **Preconditions:** demoblaze is reachable.
 
@@ -362,7 +406,7 @@ the URL, so a filtered listing has no address. Browser Back lands on the unfilte
 instead, silently discarding the shopper's chosen filter. This case is written from intended
 behaviour and fails by design, demonstrating `WEB-014`.
 
-## TC-19 — The add-to-cart confirmation reads the same for anonymous and logged-in shoppers — `WEB-007`
+## TC-21 — The add-to-cart confirmation reads the same for anonymous and logged-in shoppers — `WEB-007`
 
 **Preconditions:** demoblaze is reachable. An account is available to log into.
 
@@ -378,6 +422,36 @@ divergence between the two, not one particular wording.
 
 **Known to fail:** the anonymous and logged-in confirmations do not read the same. This case is
 written from intended behaviour and fails by design, demonstrating `WEB-007`.
+
+## TC-22 — An anonymous shopper can complete a purchase without an account
+
+**Preconditions:** demoblaze is reachable. Not logged in.
+
+**Steps:**
+
+1. Without signing up or logging in, open a product and confirm its price.
+2. Add the product to the cart and acknowledge the confirmation.
+3. Open the cart and confirm the total matches the product's price.
+4. Place an order with valid-looking details and submit it.
+
+**Expected result:** an order confirmation appears with an order id and an amount equal to the
+product's price, the same oracle `TC-01` uses. Returning to the cart afterwards shows it empty.
+Demoblaze scopes the anonymous cart to a per-browser-session cookie, so this is a legitimate,
+supported purchase path, not merely a truncated version of `TC-01` — it is the secondary scenario
+`SPEC.md:103` ("Test data") already names, and `docs/coverage-map.md` leans on it as the proof
+that auth is optional to buying.
+
+This case was implemented (`tests/e2e/purchase-journey.spec.ts`, the anonymous-shopper test)
+before it had a case id here; this entry gives it one. It is not expected to fail.
+
+## `smoke.spec.ts` is a harness check, not a designed case
+
+`tests/e2e/smoke.spec.ts` asserts that the storefront home page loads and shows the nav brand. It
+exists to prove the `@e2e` project's wiring — browser launches, reaches demoblaze, can assert on
+the rendered page — works at all, not to cover a piece of intended behaviour designed against the
+brief. It deliberately carries no `TC` id and is not listed as a case in this document for the
+same reason `AC` ids below cover only designed `@api` cases: a harness check that fails means the
+suite itself is broken, not that a numbered case failed.
 
 ## `api-main`
 
@@ -442,7 +516,8 @@ job (`API-003`), and asserting they are present would certify that defect as cor
 
 ### `GET /signin` — dropped, not carried into this table
 
-`#27` designed and then dropped a `GET /signin` test asserting `not.toBe(200)`. `swagger.yaml`
+The `@api` suite's implementation designed and then dropped a `GET /signin` test asserting
+`not.toBe(200)`. `swagger.yaml`
 documents only `POST` for `/signin`, so there is no documented contract for `GET` to violate —
 carrying it here as an `AC` row with no defect id and no positive expectation would misrepresent
 it as a designed case rather than a discarded one. Confirmed live against a local instance,
