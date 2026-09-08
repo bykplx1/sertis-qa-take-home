@@ -45,10 +45,9 @@ documented behaviour.
   instance and found behaviour the first four entries did not cover, and are **reproduced live**:
   confirmed against a local instance on 2026-09-08, independently by this register entry's author
   re-running the same requests by hand against a freshly started local instance the same day.
-  `API-005` and `API-006` also carry their id in the titles of the `tests/api/user.spec.ts` and
-  `tests/api/signin.spec.ts` tests that demonstrate them (`AC-07`–`AC-09`, `AC-18`–`AC-19`).
-  `API-007` does not yet: `tests/api/edge-cases.spec.ts:8` (`AC-21`) carries no id in its title,
-  since assigning one was out of #27's scope — see `API-007`'s own entry.
+  All three carry their id in the title of the test that demonstrates them: `AC-07`–`AC-09` in
+  `tests/api/user.spec.ts`, `AC-18`–`AC-19` and `AC-21` in `tests/api/signin.spec.ts` and
+  `tests/api/edge-cases.spec.ts`.
 
 ## `api-main`
 
@@ -216,10 +215,8 @@ documented behaviour.
 - **Severity:** Medium
 - **Verification:** reproduced live against a local instance — confirmed by issue #27 and
   independently re-confirmed by this register entry's author, both on 2026-09-08. Assigned by
-  this ticket (#28). `tests/api/edge-cases.spec.ts:8` is the test that demonstrates it; at the
-  time this entry was written its title carries no defect id, since assigning one was out of
-  #27's scope and is what this entry now provides — the id should be threaded back into that
-  test's title by whoever owns `tests/**` (`tests/**` is not this ticket's to edit).
+  this ticket (#28), which is what let the id be threaded into the title of the test that
+  demonstrates it, `tests/api/edge-cases.spec.ts:8`.
 - **Spec reference:** every one of `/signin`'s three documented responses — `200`
   (`swagger.yaml:116-149`), `404` (`:150-169`), `500` (`:170-189`) — shares the same JSON error
   envelope shape (`{status_code, status, data, message}`) and a JSON content-type; there is no

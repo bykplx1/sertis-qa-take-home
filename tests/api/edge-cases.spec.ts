@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // suite asserts intended behaviour, not observed behaviour (SPEC.md
 // "Assertion basis"). No defect id: assigning new API-0xx ids belongs to
 // ticket #28, which owns docs/defects.md.
-test('malformed JSON on POST /signin gets a JSON error envelope, not an HTML stack page @api', async ({
+test('malformed JSON on POST /signin gets a JSON error envelope, not an HTML stack page [API-007] @api', async ({
   request,
 }) => {
   const response = await request.post('/signin', {
