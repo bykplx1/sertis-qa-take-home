@@ -43,6 +43,50 @@ recommendation as a costed deliverable (the analysis and mitigation plan) withou
 stand up a demoblaze mirror inside this ten-day window, which would be a substantially larger
 effort than the window allows.
 
+## Entry and exit criteria
+
+**Entry criteria:**
+
+- The harness (task 1) runs both `@e2e` against a reachable demoblaze and `@api` against a
+  locally started `api-main`; neither is a live blocker before task 3 starts.
+- The test-data strategy (a fresh randomised account per run) is agreed, since demoblaze cannot
+  be seeded with a fixed account and every downstream task depends on that mechanism working.
+- `api-main` is treated as read-only from the outset — no task in this plan waits on a fix to
+  the defects it demonstrably has, because none will land.
+
+**Exit criteria:**
+
+- Every task in the table below is either executed and evidenced (a written deliverable, a
+  landed spec file, or a defect-register entry) or explicitly descoped by the QA lead against
+  the risk table below.
+- Every defect found is recorded in `docs/defects.md` with severity, repro steps, and
+  expected/actual behaviour, and every test that fails by design carries that defect's id in its
+  title — the traceability `SPEC.md`'s "Further Notes" commits to.
+- `npm test` runs both projects to completion and the CI pipeline reports without erroring. A
+  green run is not required: the by-design failures are the deliverable, not a bug to clear
+  before sign-off (see the README's "Expected failures").
+- Remaining gaps are enumerated, not silent: rows still `costed-in-plan-not-automated` in
+  `docs/coverage-map.md` are the honest remainder the QA lead signs off against, not an implied
+  completeness.
+- Exit is reached on the tenth elapsed day regardless of open defects in demoblaze or
+  `api-main` — this is a fixed-calendar engagement against two systems this plan cannot fix, so
+  the calendar ends it, not a bug count reaching zero.
+
+## Risks, mitigations, owners
+
+| Risk | Likelihood | Impact | Mitigation | Owner |
+|---|---|---|---|---|
+| demoblaze changes or degrades mid-engagement — third-party infrastructure that cannot be seeded, reset, or instrumented | High | High: breaks locators or flow assumptions without warning | Text/role-based selectors, a two-retry policy on `@e2e`, and the decay documented in "The case for a controlled test environment" above, accepted rather than denied | Engineer running the `@e2e` track |
+| A read-only `api-main` defect is mistaken for a suite bug during triage | Medium | Medium: wastes investigation time re-deriving a known finding | Every defect gets a `docs/defects.md` entry with severity and repro steps; a failing test's title carries the defect id so red output is self-explaining | Engineer running the `@api` track |
+| CI is deliberately non-blocking (`SPEC.md` "Pipeline"), so a genuine regression could land on `main` unnoticed | Medium | Medium: a real break hides among expected by-design failures | The job summary (`.github/scripts/summarize-failures.js`) names which defect explains each red test; a failure with no matching defect id is visible by inspection rather than buried in a merge that went through anyway | Both engineers, checked at hand-off |
+| Fixed 20 PD budget with no contingency line | Medium | High: any slip cascades onto every downstream task in the dependency chain | Critical-priority tasks are scheduled first on each engineer-track so a slip drops Low-priority tasks (12, 14) before Critical ones; task 3's "Estimate vs. actual" note is the record of this trade-off already happening once, left visible rather than retrofitted | QA lead |
+| A two-engineer team has no backup; either engineer being unavailable stalls their track | Low | High: a stalled track has no slack to absorb it | The per-day, per-engineer calendar reconciliation makes a stalled track visible the same day it happens, not at hand-off | QA lead |
+
+**Roles.** Two QA engineers execute the task table in parallel per the calendar reconciliation
+below; a QA lead makes the prioritisation calls in the risk table above when the fixed budget is
+exceeded. The developers who own demoblaze and `api-main` are outside this engagement and receive
+`docs/defects.md` as their queue, not a request for a fix within this ten-day window.
+
 ## Tasks
 
 | # | Task | Scope | Priority | Estimate (PD) | Dependencies | Rationale |
@@ -95,14 +139,14 @@ final hand-off, which genuinely is end-of-engagement work.
 
 Task 3's one-line scope — "category navigation, product listing, product detail page" — costed
 at 1.5 PD, is what a QA lead would have read as the browse surface's whole cost. It wasn't. Once
-`docs/coverage-map.md` (#16) inventoried the surface in full, pagination turned out to be five
+`docs/coverage-map.md` inventoried the surface in full, pagination turned out to be five
 further interactions the scope line never named, and a defect oracle for two of them
 (`WEB-011`, `WEB-012`) had to be argued from first principles rather than read off a spec
-(`docs/adr/0001-pagination-oracle.md`, #18) before a test could even be written. Category-narrows-
+(`docs/adr/0001-pagination-oracle.md`) before a test could even be written. Category-narrows-
 listing (`TC-13`–`TC-15`) turned out to need its own oracle work too: no rendered evidence
 anywhere on the site connects a product to a category, so "Laptops shows only laptops" is not an
 assertable claim, and the cases that shipped assert something weaker and harder to design —
-selectivity and self-consistency — instead (#17). None of that is visible in a one-line scope
+selectivity and self-consistency — instead. None of that is visible in a one-line scope
 that reads like a straightforward CRUD-listing check.
 
 **This reconciliation is deliberately left broken, not retrofitted.** The task table above is

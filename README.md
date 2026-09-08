@@ -92,7 +92,7 @@ specific deliverable:
 | 3 — CI pipeline running the above on merge | Two-job, non-blocking GitHub Actions pipeline (brief asks for GitLab CI or equivalent; GitHub Actions used, see `SPEC.md` "Toolchain"/"Pipeline") | `.github/workflows/ci.yml`, `.github/scripts/summarize-failures.js` |
 
 Supporting documents that don't map to a single brief line item but underpin all of them:
-`SPEC.md` (design decisions and rationale for every choice above), `CONTEXT.md` (an eight-term
+`SPEC.md` (design decisions and rationale for every choice above), `CONTEXT.md` (a ten-term
 glossary used consistently across every document and test name), `docs/defects.md` (the defect
 register every failing test resolves to), `ASSUMPTIONS.md` (every place a decision had to be made
 rather than derived — including why the purchase-flow confirmation dialog is the only oracle
@@ -130,19 +130,3 @@ Every assumption behind the reasoning above — including that demoblaze's purch
 contacts a server with the order, which is why the confirmation dialog is the only oracle
 available and exactly where the `@e2e` assertion stops — is collected in one place:
 **`ASSUMPTIONS.md`**.
-
-## Agent skills
-
-### Issue tracker
-
-Issues live as GitHub issues in `bykplx1/sertis-qa-take-home`, managed with the `gh` CLI. See
-`docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The five canonical triage labels, unchanged: `needs-triage`, `needs-info`, `ready-for-agent`,
-`ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

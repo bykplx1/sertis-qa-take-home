@@ -90,7 +90,7 @@ Tests assert intended behaviour rather than observed behaviour. Where a system v
 
 **Toolchain.** Playwright with TypeScript for both suites, configured as two Playwright projects sharing one install, one runner and one report. The api suite uses Playwright's request context rather than a second framework.
 
-**Vocabulary.** Exactly two tags: `@e2e` for demoblaze browser tests, `@api` for `api-main` HTTP tests. No further taxonomy. Terms used consistently across all documents are defined in a short root `CONTEXT.md`: e2e, api, journey, defect, VU, threshold, funnel, think time.
+**Vocabulary.** Exactly two tags: `@e2e` for demoblaze browser tests, `@api` for `api-main` HTTP tests. No further taxonomy. Terms used consistently across all documents are defined in a short root `CONTEXT.md`: e2e, api, journey, defect, VU, threshold, funnel, think time, result set, page window.
 
 **E2E architecture.** Page objects as classes, injected into tests as Playwright fixtures. Specs contain no selectors; a spec step reads as an intent-level call. This is deliberate: the designed test case document and the automated script should map to each other line for line.
 

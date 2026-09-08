@@ -21,14 +21,14 @@ should be updated to match rather than the register renumbered to match this doc
 Two further cases, `TC-02` and `TC-08`, were written from intended behaviour at design time and
 only found to fail once the `@e2e` suite actually drove a browser against the live site — neither
 demoblaze defect was anticipated when this document was first written. `TC-02` carries `WEB-009`
-(found implementing the checkout-validation suite, issue #10) and `TC-08` carries `WEB-010`
-(found implementing the cart-behaviour suite, issue #9); both ids were added to the register
+(found implementing the checkout-validation suite) and `TC-08` carries `WEB-010`
+(found implementing the cart-behaviour suite); both ids were added to the register
 after the fact rather than assumed up front, the same way `TC-05` and `TC-06` assumed `WEB-001`
 and `WEB-002` up front.
 
 `TC-09` onward cover the browse and listing surface, added once `docs/adr/0001-pagination-oracle.md`
-settled a pagination oracle and issues #17 and #22 designed the remaining category, cart-identity
-and post-purchase-navigation cases. Five of them are expected to fail by design: `TC-11`
+settled a pagination oracle and the remaining category, cart-identity and post-purchase-navigation
+cases were designed on top of it. Five of them are expected to fail by design: `TC-11`
 (`WEB-011`), `TC-12` (`WEB-012`), `TC-17` (`WEB-013`), `TC-18` (`WEB-014`), and `TC-19`
 (`WEB-007`, added once the existing `/added/i` assertion was found too loose to demonstrate it).
 Nine cases are therefore expected to fail by design in total: `TC-02`, `TC-05`, `TC-06`, `TC-08`,
@@ -80,7 +80,7 @@ contents. Submitting the order form against a cart confirmed empty (`itemCount()
 accepted: a confirmation dialog appears showing a generated order id and an amount of `0`,
 reproduced repeatedly against the live site. This case was written from intended behaviour at
 design time; the defect was only found live while implementing the `@e2e` checkout-validation
-suite (issue #10), not anticipated up front the way `TC-05` and `TC-06` were. It fails by
+suite, not anticipated up front the way `TC-05` and `TC-06` were. It fails by
 design, demonstrating `WEB-009`.
 
 ## TC-03 — Ordering with a blank name is prevented
@@ -313,6 +313,12 @@ not destroy it. This case is not to be read as demonstrating `WEB-005`; the cart
 `WEB-005` describes did not reproduce when checked alongside it.
 
 ## TC-17 — After a completed purchase, the order modal closes, the form clears, and the order cannot be repeated — `WEB-013`
+
+**Filed under browse, not checkout-validation.** This is a checkout/order-modal case, but it lands
+in `tests/e2e/browse.spec.ts` alongside `TC-09`–`TC-19` rather than in
+`tests/e2e/checkout-validation.spec.ts` next to `TC-02`–`TC-06`. It exercises the nav `Cart` link
+(step 3), which needs the `listingPage` fixture the browse cases already share; the
+checkout-validation spec has no navigation-bar interaction and no reason to carry that fixture.
 
 **Preconditions:** logged in with a valid account. A product is in the cart. The order form is
 open and filled with valid-looking values.
