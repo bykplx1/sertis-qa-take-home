@@ -36,7 +36,6 @@ async function signUpAndLogIn(
 
 /** Adds the one product this suite uses to a freshly logged-in shopper's cart. */
 async function addProductToCart(
-  homePage: import('./pages/home-page').HomePage,
   listingPage: import('./pages/listing-page').ListingPage,
   productPage: import('./pages/product-page').ProductPage,
 ): Promise<void> {
@@ -89,7 +88,7 @@ test('TC-03: ordering with a blank name is prevented @e2e', async ({
   freshAccount,
 }) => {
   await signUpAndLogIn(homePage, freshAccount);
-  await addProductToCart(homePage, listingPage, productPage);
+  await addProductToCart(listingPage, productPage);
   await cartPage.open();
   await cartPage.waitForItem(PRODUCT_NAME);
   await cartPage.placeOrder();
@@ -120,7 +119,7 @@ test('TC-04: ordering with a blank card is prevented @e2e', async ({
   freshAccount,
 }) => {
   await signUpAndLogIn(homePage, freshAccount);
-  await addProductToCart(homePage, listingPage, productPage);
+  await addProductToCart(listingPage, productPage);
   await cartPage.open();
   await cartPage.waitForItem(PRODUCT_NAME);
   await cartPage.placeOrder();
@@ -152,7 +151,7 @@ test('TC-05: an invalid card number format is rejected — WEB-001 @e2e', async 
   freshAccount,
 }) => {
   await signUpAndLogIn(homePage, freshAccount);
-  await addProductToCart(homePage, listingPage, productPage);
+  await addProductToCart(listingPage, productPage);
   await cartPage.open();
   await cartPage.waitForItem(PRODUCT_NAME);
   await cartPage.placeOrder();
@@ -186,7 +185,7 @@ test('TC-06: an impossible expiry date is rejected — WEB-002 @e2e', async ({
   freshAccount,
 }) => {
   await signUpAndLogIn(homePage, freshAccount);
-  await addProductToCart(homePage, listingPage, productPage);
+  await addProductToCart(listingPage, productPage);
   await cartPage.open();
   await cartPage.waitForItem(PRODUCT_NAME);
   await cartPage.placeOrder();

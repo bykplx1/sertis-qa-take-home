@@ -1,4 +1,4 @@
-import { type Locator, type Page } from '@playwright/test';
+import { type Locator, type Page, expect } from '@playwright/test';
 import { parsePrice } from '../support/price';
 
 // Matches the shape of `CartPage.stableTotal()` (`tests/e2e/pages/cart-page.ts:52`):
@@ -11,10 +11,21 @@ const STABLE_READS_REQUIRED = 3;
 const POLL_INTERVAL_MS = 25;
 const MAX_POLL_ATTEMPTS = 200; // ~5s ceiling
 
-// `settleAfterClick()` waits this long before its first read, clearing the
-// 321-702ms stale window outright rather than relying on 3 x 25ms
-// (~75-120ms) of polling, which sits deep inside it (issue #25 E2).
+// `settleAfterCategoryClick()` waits this long before its first read.
+// Category filtering has no synchronous DOM signal equivalent to `#next2`'s
+// `value` attribute (verified live: that attribute never moves on a
+// category click, only on `Next`/`Previous` — ASSUMPTIONS.md), so this is a
+// bounded sleep, not a proof, and is used nowhere a false "settled" reading
+// would certify a defect as fixed (`openCategory()` settles on ANY window,
+// issue #25 E11 — the caller's own assertion is what can still fail, and
+// correctly so, if this fires early). See ASSUMPTIONS.md for the margin
+// this constant is asserting over the documented 321-702ms window.
 const STALE_WINDOW_CLEAR_MS = 1_000;
+
+// `clickPrevious()`'s bound while waiting for `#next2`'s `value` attribute
+// to demonstrably change (or demonstrably not) after a click — a live
+// signal, not a sleep, so this only needs to be generous, not exact.
+const NEXT_VALUE_SETTLE_TIMEOUT_MS = 5_000;
 
 /**
  * The category sidebar, the product grid, and pagination — all on
@@ -67,6 +78,20 @@ export class ListingPage {
   }
 
   /**
+   * `#next2` is not one of demoblaze's duplicated ids (WEB-006) — there is
+   * exactly one `Next` control — so it is addressed directly (SPEC.md:
+   * "ids are used only where verified unique"), through this getter rather
+   * than inline, matching `cardTitles`/`categoryLinks` above.
+   */
+  private get nextControl(): Locator {
+    return this.page.locator('#next2');
+  }
+
+  private get previousControl(): Locator {
+    return this.page.locator('#prev2');
+  }
+
+  /**
    * The category links' visible text, read from the DOM rather than
    * hardcoded, so a fourth category added later is picked up automatically
    * (issue #19).
@@ -112,12 +137,12 @@ export class ListingPage {
 
   /** Whether a further page window is offered ahead of the current one. */
   async hasNextPage(): Promise<boolean> {
-    return this.page.locator('#next2').isVisible();
+    return this.nextControl.isVisible();
   }
 
   /** Whether a `Previous` control is offered on the current page window. */
   async isPreviousOffered(): Promise<boolean> {
-    return this.page.locator('#prev2').isVisible();
+    return this.previousControl.isVisible();
   }
 
   /**
@@ -132,22 +157,36 @@ export class ListingPage {
    */
   async nextPage(): Promise<string[]> {
     const before = await this.productNames();
-    await this.page.locator('#next2').click();
+    await this.nextControl.click();
     return this.waitForChange(before);
   }
 
   /**
    * Clicks `Previous` and returns the window once it has genuinely
-   * settled. Exists solely for TC-11 (`WEB-011`, issue #25 E2/E8): reading
-   * on the first 3 stable polls (~75-120ms) sits deep inside the
-   * 321-702ms window the OLD window stays rendered after a click (module
-   * docstring above), so a "no change" reading taken that early would be
-   * indistinguishable from one taken honestly. `settleAfterClick()` waits
-   * the window out first.
+   * settled. Exists solely for TC-11 (`WEB-011`, issue #25 E2/E8).
+   *
+   * A fixed sleep cannot prove "no change" here, only assume it lasted
+   * longer than whatever the stale window turns out to be on the machine
+   * this happens to run on — which is the exact failure mode this method
+   * replaces. `#next2`'s `value` attribute is a live signal instead: it
+   * flips in lockstep with the corrupted window (`docs/defects.md`
+   * WEB-011, confirmed live — ASSUMPTIONS.md), so waiting for it to
+   * demonstrably change, or demonstrably not within a generous bound,
+   * proves the outcome rather than assuming a margin covered it.
    */
   async clickPrevious(): Promise<string[]> {
-    await this.page.locator('#prev2').click();
-    return this.settleAfterClick();
+    const before = (await this.nextControl.getAttribute('value')) ?? '';
+    await this.previousControl.click();
+    await expect(this.nextControl)
+      .not.toHaveAttribute('value', before, { timeout: NEXT_VALUE_SETTLE_TIMEOUT_MS })
+      .catch(() => {
+        // Timed out without the attribute moving: proof, not an assumption,
+        // that this click did not navigate the listing.
+      });
+    return this.pollUntilStable(
+      () => true,
+      (lastNames) => `Listing did not settle after Previous (last read: ${JSON.stringify(lastNames)})`,
+    );
   }
 
   /**
@@ -174,7 +213,7 @@ export class ListingPage {
    */
   async openCategory(category: string): Promise<string[]> {
     await this.page.getByRole('link', { name: category, exact: true }).click();
-    return this.settleAfterClick();
+    return this.settleAfterCategoryClick();
   }
 
   /**
@@ -185,10 +224,12 @@ export class ListingPage {
    * flip itself is not instantaneous for every card: reading on the first
    * observed difference risks returning a partially-rendered grid.
    * "Acceptable, and has stopped moving" is the sound synchronisation
-   * primitive here, and `waitForChange` and `settleAfterClick` are both
-   * exactly that shape — they differ only in what "acceptable" means —
-   * so the poll itself lives once (issue #19 / issue #20 review) rather
-   * than being hand-rolled per case, the same idiom as
+   * primitive here, and `waitForChange` and `clickPrevious`/
+   * `settleAfterCategoryClick` are all built on it — they differ only in
+   * what "acceptable" means and in how they decide the window has
+   * genuinely stopped moving — so the poll itself lives once (issue #19 /
+   * issue #20 review) rather than being hand-rolled per case, the same
+   * idiom as
    * `CartPage.stableTotal()` (`tests/e2e/pages/cart-page.ts:52`).
    */
   private async pollUntilStable(
@@ -222,16 +263,23 @@ export class ListingPage {
 
   /**
    * Waits out the 321-702ms window during which the OLD product-name
-   * window stays rendered after a click (module docstring above), then
-   * polls until the window has stopped moving, and returns whatever window
-   * that turns out to be — changed from before the click, or not. Used by
-   * both `clickPrevious()` and `openCategory()` (issue #25 E2/E11): neither
-   * requires a change to have happened before returning, so a caller whose
-   * own assertion depends on one (TC-11's WEB-011 case; TC-13's
-   * category-narrowing case) fails there, with a readable diff, instead of
-   * inside this method with an opaque timeout.
+   * window stays rendered after a category click (module docstring above),
+   * then polls until the window has stopped moving, and returns whatever
+   * window that turns out to be — changed from before the click, or not
+   * (issue #25 E11): if a category filter stopped narrowing the listing —
+   * the fault TC-13 exists to catch — that is for the caller's own
+   * assertion to catch with a readable diff, not for this method to die on
+   * with an opaque timeout.
+   *
+   * Unlike `clickPrevious()`, this has no equivalent to `#next2`'s `value`
+   * attribute to wait on — verified live that it does not move on a
+   * category click (ASSUMPTIONS.md) — so this is a bounded sleep rather
+   * than a proof. That is acceptable here specifically because nothing
+   * this method returns is itself asserted as correct; `openCategory()`
+   * settling on any window is what makes reading too early a caller-side
+   * (readable) failure rather than a page-object-side false pass.
    */
-  private async settleAfterClick(): Promise<string[]> {
+  private async settleAfterCategoryClick(): Promise<string[]> {
     await this.page.waitForTimeout(STALE_WINDOW_CLEAR_MS);
     return this.pollUntilStable(
       () => true,

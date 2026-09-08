@@ -60,6 +60,29 @@ API directly to shortcut or double-check a UI assertion (`SPEC.md`, "Oracles" an
   internet and can be noisy for reasons that have nothing to do with the product; `api-main` is
   local, in-memory and deterministic, so a flaky result there is a finding worth preserving, not
   noise to absorb. `SPEC.md` ("Retries").
+- **The listing's stale-window synchronisation is closed two different ways, because only one of
+  the two clicks it covers has a live signal to wait on.** `ListingPage.clickPrevious()` (`TC-11`,
+  `WEB-011`) waits for `#next2`'s `value` attribute to demonstrably change, or demonstrably not,
+  rather than sleeping a fixed duration and hoping it outlasted whatever the 321-702ms stale window
+  (issue #19) turns out to be on the machine the suite happens to run on. That attribute is the
+  same one `docs/defects.md` (`WEB-011`) documents flipping `9`→`10` in lockstep with the corrupted
+  window; a throwaway probe against the live site during issue #25 confirmed the flip lands in the
+  same ~100ms poll interval as the rendered product names, so waiting on it is waiting on the
+  content, not a proxy for it. The wait is bounded at 5s (`NEXT_VALUE_SETTLE_TIMEOUT_MS`,
+  `tests/e2e/pages/listing-page.ts`) purely as a ceiling against a hung page, not as the thing doing
+  the proving.
+
+  `ListingPage.openCategory()`'s `settleAfterCategoryClick()` has no equivalent signal — the same
+  probe found `#next2`'s `value` never moves on a category click, only on `Next`/`Previous` — so it
+  falls back to a fixed 1000ms sleep (`STALE_WINDOW_CLEAR_MS`) before polling for stability. 1000ms
+  against a documented worst case of 702ms is a thin margin on a public-internet, CI-hosted run, and
+  reading too early here is a real risk. It is judged acceptable specifically because
+  `openCategory()` settles on *any* window rather than asserting one is different from before
+  (issue #25 E11): a premature read fails at the calling spec's own assertion, with a readable
+  diff, not inside the page object, and not as a silent false pass the way `clickPrevious()`'s old
+  sleep-based version could. If demoblaze ever exposes an equivalent signal for category filtering,
+  this sleep should be replaced the same way `clickPrevious()`'s was.
+
 - **Two `@e2e` failures were not anticipated at design time.** `TC-02`/`WEB-009` (empty-cart
   checkout accepted) and `TC-08`/`WEB-010` (cart lost on login) were written from intended
   behaviour before the suite existed, and only found to disagree with the live site once the

@@ -53,18 +53,38 @@ export class CartPage {
   }
 
   /**
-   * Asserts the cart holds no items. Rows render asynchronously after the
-   * cart's fetch resolves (`:49-56` below) — a bare `count() === 0` read
-   * right after `open()` used to be a no-op, since a still-loading cart
-   * also reads zero rows at that instant. `open()` now waits for the
-   * `/viewcart` response itself before returning, so this is a genuine
-   * wait rather than a point-in-time read: an empty cart's zero rows is
-   * already settled by the time this runs, and a non-empty cart's rows are
-   * already rendering, so this retries until they arrive — correctly
-   * failing — or the timeout elapses.
+   * Asserts the cart holds no items. `open()` waiting for the `/viewcart`
+   * response closes one race (a read before the fetch even started
+   * reporting zero rows by default) but not the next one: rows are still
+   * appended one at a time in that response's own success callback, so a
+   * single `toHaveCount(0)` check can pass on its very first poll, at the
+   * exact moment a non-empty cart's rows are mid-append and about to
+   * become non-zero — the same shape of race `stableTotal()` below closes
+   * for the total. This polls the row count to the same
+   * `STABLE_READS_REQUIRED`-consecutive-reads stability before accepting
+   * zero, then asserts once more for a readable failure message if it
+   * never gets there.
    */
-  async assertEmpty(timeout = 15_000): Promise<void> {
-    await expect(this.page.locator('#tbodyid tr')).toHaveCount(0, { timeout });
+  async assertEmpty(): Promise<void> {
+    const rows = this.page.locator('#tbodyid tr');
+    let stableReads = 0;
+
+    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+      const count = await rows.count();
+
+      if (count === 0) {
+        stableReads += 1;
+        if (stableReads >= STABLE_READS_REQUIRED) {
+          return;
+        }
+      } else {
+        stableReads = 0;
+      }
+
+      await this.page.waitForTimeout(POLL_INTERVAL_MS);
+    }
+
+    await expect(rows).toHaveCount(0, { timeout: 0 });
   }
 
   async removeItem(productName: string): Promise<void> {
