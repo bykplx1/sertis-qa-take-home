@@ -5,13 +5,21 @@
 // summary, written to $GITHUB_STEP_SUMMARY (rendered inline in the Actions
 // run, no artifact download needed) and echoed to stdout.
 //
-// Sorts every non-passing test into one of three buckets:
+// Sorts every non-passing test into one of four buckets:
 //   1. By-design defect failures  - the title carries a defect id (API-xxx /
 //      WEB-xxx per docs/defects.md's numbering) - expected, not a regression.
-//   2. Possible demoblaze outage  - no defect id, but the failure error looks
+//      Includes `test.fail()` reproductions failing as declared: Playwright
+//      reports those with `status: "expected"`, the same value a genuine
+//      pass carries, so this bucket is only reachable by also reading
+//      `expectedStatus` - see collectNonPassing below.
+//   2. Defects that may be FIXED   - a `test.fail()` test (expectedStatus
+//      "failed") whose real run passed anyway (status "unexpected"). This is
+//      the loud, opposite case: the defect this test exists to reproduce may
+//      no longer be present and wants a human look, not a green checkmark.
+//   3. Possible demoblaze outage  - no defect id, but the failure error looks
 //      like a network/navigation problem talking to third-party
 //      infrastructure rather than an assertion mismatch.
-//   3. Unexpected failures        - everything else. These are the ones a
+//   4. Unexpected failures        - everything else. These are the ones a
 //      reviewer should look at as possible regressions.
 //
 // Usage: node summarize-failures.js <results.json> "<suite label>" [testStepExitCode]
@@ -41,12 +49,23 @@ const testStepExitCode = exitCodeArg && exitCodeArg.trim() !== '' ? exitCodeArg.
 // which bucket heading it sits under - the raw status string ("unexpected")
 // used to appear verbatim even inside a "By-design (expected)" section,
 // contradicting the heading it was in.
+//
+// `test.fail()` inverts what "expected" means for a given entry, so the
+// label also needs `expectedStatus` (see collectNonPassing/classify): a
+// plain test's "unexpected" is a real failure, but a `test.fail()` test's
+// "unexpected" is an unexpected PASS, which is a completely different fact
+// and must not read as "failed".
 const STATUS_LABEL = {
   unexpected: 'failed',
   flaky: 'flaky, passed after retry',
 };
-function statusLabel(status) {
-  return STATUS_LABEL[status] || status;
+function statusLabel(entry) {
+  if (entry.expectedStatus === 'failed') {
+    if (entry.status === 'expected') return 'failed as expected (test.fail())';
+    if (entry.status === 'unexpected') return 'passed unexpectedly (test.fail())';
+    if (entry.status === 'flaky') return 'flaky - reproduced the defect on some attempts, not others';
+  }
+  return STATUS_LABEL[entry.status] || entry.status;
 }
 
 const DEFECT_ID_RE = /\b(API|WEB)-\d{3}\b/;
@@ -68,7 +87,15 @@ function collectNonPassing(report) {
     for (const spec of suite.specs || []) {
       for (const test of spec.tests || []) {
         const status = test.status; // 'expected' | 'unexpected' | 'flaky' | 'skipped'
-        if (status === 'expected' || status === 'skipped') continue;
+        // `expectedStatus` is what Playwright expects the test to end in -
+        // 'passed' for a plain test, 'failed' for a `test.fail()`. A
+        // `test.fail()` reproduction that fails as declared still reports
+        // `status: 'expected'`, the same value a genuine pass carries, so a
+        // plain `status === 'expected'` skip would silently drop every
+        // known-defect reproduction (issue #33). Only skip a status of
+        // 'expected' when it is *also* an ordinary expected pass.
+        if (status === 'skipped') continue;
+        if (status === 'expected' && test.expectedStatus !== 'failed') continue;
 
         const lastResult = (test.results || [])[test.results.length - 1];
         const errorMessage =
@@ -82,6 +109,7 @@ function collectNonPassing(report) {
         found.push({
           title: [...nextPath, spec.title].filter(Boolean).join(' > '),
           status,
+          expectedStatus: test.expectedStatus,
           errorMessage,
         });
       }
@@ -99,6 +127,21 @@ function collectNonPassing(report) {
 
 function classify(entry) {
   const defectMatch = entry.title.match(DEFECT_ID_RE);
+
+  // A `test.fail()` test (expectedStatus 'failed') whose real run passed
+  // anyway reports `status: 'unexpected'` - the same status a genuine
+  // regression carries. That is E10's whole point: when the defect this
+  // test reproduces gets fixed, this is how it surfaces. It must go loud as
+  // its own bucket, not fall into "By-design" (it did not fail) or get
+  // buried in "Unexpected failures" (it is not a regression - it's good
+  // news that wants a human to confirm and retire the test.fail()).
+  if (entry.status === 'unexpected' && entry.expectedStatus === 'failed') {
+    return {
+      bucket: 'fixedDefect',
+      defectId: defectMatch ? defectMatch[0].replace(/[[\]]/g, '') : undefined,
+    };
+  }
+
   if (defectMatch) {
     return { bucket: 'defect', defectId: defectMatch[0].replace(/[[\]]/g, '') };
   }
@@ -118,6 +161,7 @@ function renderSummary(entries, stats) {
   lines.push('');
 
   const byDefect = entries.filter((e) => e.classification.bucket === 'defect');
+  const fixedDefects = entries.filter((e) => e.classification.bucket === 'fixedDefect');
   const byOutage = entries.filter((e) => e.classification.bucket === 'outage');
   const unexpected = entries.filter((e) => e.classification.bucket === 'unexpected');
 
@@ -130,7 +174,24 @@ function renderSummary(entries, stats) {
     lines.push('### By-design defect failures (expected - see `docs/defects.md`)');
     lines.push('');
     for (const e of byDefect) {
-      lines.push(`- **${e.classification.defectId}** (${statusLabel(e.status)}): ${e.title}`);
+      lines.push(`- **${e.classification.defectId}** (${statusLabel(e)}): ${e.title}`);
+    }
+    lines.push('');
+  }
+
+  if (fixedDefects.length > 0) {
+    lines.push('### :bell: Defects that may be FIXED (`test.fail()` passed unexpectedly)');
+    lines.push('');
+    lines.push(
+      '_Each test below is written with `test.fail()` to reproduce a known defect - it should ' +
+        'fail every run until the defect is fixed. It passed instead. That is good news, but it ' +
+        "is not certified here: confirm the fix, then update the test and `docs/defects.md` " +
+        'rather than leaving the defect id live against a passing test._',
+    );
+    lines.push('');
+    for (const e of fixedDefects) {
+      const idLabel = e.classification.defectId ? `**${e.classification.defectId}** ` : '';
+      lines.push(`- ${idLabel}(${statusLabel(e)}): ${e.title}`);
     }
     lines.push('');
   }
@@ -145,7 +206,7 @@ function renderSummary(entries, stats) {
     );
     lines.push('');
     for (const e of byOutage) {
-      lines.push(`- (${statusLabel(e.status)}): ${e.title}`);
+      lines.push(`- (${statusLabel(e)}): ${e.title}`);
       if (e.errorMessage) {
         lines.push(`  \`${e.errorMessage.split('\n')[0].slice(0, 200)}\``);
       }
@@ -157,7 +218,7 @@ function renderSummary(entries, stats) {
     lines.push('### Unexpected failures (possible regressions - no defect id found in title)');
     lines.push('');
     for (const e of unexpected) {
-      lines.push(`- (${statusLabel(e.status)}): ${e.title}`);
+      lines.push(`- (${statusLabel(e)}): ${e.title}`);
       if (e.errorMessage) {
         lines.push(`  \`${e.errorMessage.split('\n')[0].slice(0, 200)}\``);
       }
@@ -279,9 +340,16 @@ function main() {
       (typeof s.flaky === 'number' ? s.flaky : 0) +
       (typeof s.skipped === 'number' ? s.skipped : 0)
     : nonPassing.length;
+  // Playwright's own `stats.expected` counts every test whose result
+  // matched its `expectedStatus` - which, for a `test.fail()` reproduction
+  // that failed as declared, is still `expected` even though it is now
+  // listed under "By-design defect failures" below. Subtracting those out
+  // keeps the headline "N passed" honest instead of counting known-defect
+  // reproductions as passes (the false-green this ticket exists to fix).
+  const byDesignFailureCount = nonPassing.filter((e) => e.status === 'expected').length;
   const stats = {
     total,
-    expected: hasStats ? s.expected : undefined,
+    expected: hasStats ? s.expected - byDesignFailureCount : undefined,
   };
 
   // A results file that exists and parses but describes zero executed tests
