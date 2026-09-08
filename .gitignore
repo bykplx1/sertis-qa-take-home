@@ -3,7 +3,8 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
-*-results.json
+/e2e-results.json
+/api-results.json
 .env
 .env.*
 
