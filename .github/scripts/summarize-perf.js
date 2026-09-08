@@ -129,7 +129,13 @@ if (summary === null) {
 } else {
   const metrics = summary.metrics || {};
   const thresholds = collectThresholds(metrics);
-  const breached = thresholds.filter((t) => !t.ok);
+  // A zero-sample row is neither held nor a genuine breach — it means the
+  // request/metric the row depends on never happened, and k6 can still
+  // report `ok: true` on it (the vacuity this whole change exists to
+  // catch). Kept as its own bucket, not folded into "breached", so a real
+  // performance breach and a broken/empty run are never printed the same.
+  const vacuous = thresholds.filter((t) => t.samples === 0);
+  const breached = thresholds.filter((t) => !t.ok && t.samples !== 0);
 
   if (thresholds.length === 0) {
     say('### :warning: No thresholds evaluated');
@@ -139,6 +145,18 @@ if (summary === null) {
         'produces a chart, not a verdict (`CONTEXT.md`) — check that the script’s `options.thresholds` ' +
         'survived, and that the tagged requests the thresholds reference actually ran.',
     );
+  } else if (vacuous.length > 0) {
+    say(`### :rotating_light: ${vacuous.length} of ${thresholds.length} threshold(s) measured ZERO samples`);
+    say('');
+    say(
+      'A threshold can report `ok: true` on a metric with zero samples — not shown here as ' +
+        '"held": the request or metric a zero-sample row depends on never happened this run. See ' +
+        'the `Samples` column below for which ones.',
+    );
+    if (breached.length > 0) {
+      say('');
+      say(`In addition, ${breached.length} threshold(s) that did collect samples were genuinely breached.`);
+    }
   } else if (breached.length === 0) {
     say(`### :white_check_mark: All ${thresholds.length} thresholds held`);
   } else {
@@ -151,22 +169,22 @@ if (summary === null) {
     );
   }
 
-  say('');
-  say(
-    profile === 'smoke'
-      ? `Profile: \`smoke\`. A smoke run is seconds long with single-digit VUs, by design — read ` +
-          'its "held" verdicts against the sample counts below, not as the plan-shaped `full` ' +
-          "run's evidence."
-      : `Profile: \`${profile}\`.`,
-  );
+  if (profile === 'smoke') {
+    say('');
+    say(
+      'Profile: `smoke`. A smoke run is seconds long with single-digit VUs, by design — read its ' +
+        "verdicts against the sample counts below, not as the plan-shaped `full` run's evidence.",
+    );
+  }
+
   say('');
   say('| Threshold | Metric | Samples | Verdict |');
   say('|---|---|---|---|');
   for (const t of thresholds) {
     const samples = t.samples === null ? '—' : String(t.samples);
-    say(
-      `| \`${t.expression}\` | \`${t.metric}\` | ${samples} | ${t.ok ? ':white_check_mark: held' : ':x: breached'} |`,
-    );
+    const verdict =
+      t.samples === 0 ? ':rotating_light: vacuous (0 samples)' : t.ok ? ':white_check_mark: held' : ':x: breached';
+    say(`| \`${t.expression}\` | \`${t.metric}\` | ${samples} | ${verdict} |`);
   }
 
   say('');
@@ -180,7 +198,9 @@ if (summary === null) {
 
   say('');
   say(
-    `Full k6 summary and console log are attached to this run as artifacts. k6 exit code: \`${k6ExitCode}\`.`,
+    `Full k6 summary and console log are attached to this run as artifacts (both carry the k6 ` +
+      `version — see below). k6 version: \`${summary.k6_version || 'unknown (not recorded — see perf.yml Install k6 step)'}\`. ` +
+      `k6 exit code: \`${k6ExitCode}\`.`,
   );
   say('');
   say(

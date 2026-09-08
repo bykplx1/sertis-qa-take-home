@@ -169,7 +169,11 @@ notion of "fast enough."
 | LCP (browser-level VUs), p75 | < 2500ms | The "good" boundary of Google's Core Web Vitals LCP scale — a third-party standard borrowed here because demoblaze publishes no equivalent of its own. |
 
 All four are pass/fail thresholds encoded in the k6 script (`thresholds` block), not advisory
-lines on a chart. A run that breaches any threshold fails, by design.
+lines on a chart. A run that breaches any threshold fails, by design. The `thresholds` block
+itself holds nine expressions, not four: these four business thresholds, a fifth (`checks`, no
+equivalent here — see `perf/README.md`, "Checks") that catches a request "succeeding" with a
+malformed response, and four sample-count guards that stop a threshold with zero samples from
+reporting held. `perf/README.md`, "Thresholds", is the accounting for all nine.
 
 **What "order submission" actually measures.** demoblaze's purchase flow never contacts a server
 with the order (`ASSUMPTIONS.md`, "The one the acceptance criteria calls out by name"), so there

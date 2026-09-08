@@ -59,6 +59,7 @@
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { Counter } from 'k6/metrics';
 import { browser } from 'k6/browser';
 // Renders the same end-of-test summary k6 prints by default, which defining
 // handleSummary() below otherwise suppresses. See handleSummary at the foot
@@ -72,6 +73,18 @@ import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.4/index.js';
 const API_URL = __ENV.DEMOBLAZE_API_URL || 'https://api.demoblaze.com';
 const SITE_URL = __ENV.DEMOBLAZE_SITE_URL || 'https://www.demoblaze.com';
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+// The resolved k6 binary version, passed in by perf.yml (`-e
+// K6_RESOLVED_VERSION=...`, captured from the pinned `k6 version` at install
+// time — see C9) so it lands in perf-summary.json itself, not only in a CI
+// log line that doesn't outlive the runner. Unset when run locally
+// (`npm run perf:load` / `npm run perf:smoke`), where `k6 version` on the
+// terminal is right there.
+const K6_RESOLVED_VERSION = __ENV.K6_RESOLVED_VERSION || null;
+
+// Counter incremented once per successful webVitals navigation — see
+// webVitalsScenario and the `web_vital_navigations` threshold below.
+const webVitalNavigations = new Counter('web_vital_navigations');
 
 // `smoke` runs seconds instead of minutes and single-digit VUs instead of 20,
 // so the script itself can be proven runnable (executes, requests succeed,
@@ -116,6 +129,11 @@ const PROFILES = {
     ],
     checkout: { rate: 6, timeUnit: '1m', duration: '9m', preAllocatedVUs: 10, maxVUs: 20 },
     webVitals: { vus: 2, duration: '9m' },
+    // A nine-minute run at this load shape produces enough checks (all
+    // scenarios combined) that a single genuinely-transient demoblaze
+    // hiccup — this is third-party infrastructure with no SLA — doesn't
+    // swing the rate; 99% is a meaningful signal at this sample size.
+    checksThreshold: 'rate>0.99',
   },
   smoke: {
     funnelStages: [
@@ -125,6 +143,16 @@ const PROFILES = {
     ],
     checkout: { rate: 6, timeUnit: '1m', duration: '20s', preAllocatedVUs: 2, maxVUs: 4 },
     webVitals: { vus: 1, duration: '20s' },
+    // The smoke profile yields roughly 25-40 checks total (funnel is
+    // seconds long with 2 VUs). At that sample size a single transient
+    // demoblaze failure is 2.5-4% of the population — enough to breach a
+    // 99% floor on its own, which would fail the "does the script run"
+    // smoke check on demoblaze's noise rather than the script's
+    // correctness. `@e2e` buys the equivalent tolerance via retries
+    // (ASSUMPTIONS.md, "@e2e retries twice"); k6 has no retry mechanism,
+    // so the threshold is loosened here instead. Deliberately looser than
+    // `full`'s 99% — stated here, not left implicit.
+    checksThreshold: 'rate>0.80',
   },
 };
 
@@ -135,8 +163,12 @@ export const options = {
   // p(75), the exact percentile performance-plan.md §4 sets the LCP threshold
   // on. The threshold still evaluates without this, but neither the summary
   // nor perf-summary.json would show the number it evaluated, so a reader
-  // could see "held" and not what it held at. Added explicitly.
-  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(75)', 'p(90)', 'p(95)'],
+  // could see "held" and not what it held at. Added explicitly. `count` is
+  // added too: it's the only way a Trend metric's sample size (0, when
+  // nothing was measured) shows up in the JSON summary at all —
+  // `.github/scripts/summarize-perf.js` reads it to flag a "held" verdict
+  // on zero samples as vacuous rather than clean.
+  summaryTrendStats: ['count', 'avg', 'min', 'med', 'max', 'p(75)', 'p(90)', 'p(95)'],
   scenarios: {
     funnel: {
       executor: 'ramping-vus',
@@ -179,37 +211,57 @@ export const options = {
     // (performance-plan.md §4) — the funnel scenario's purchases arrive
     // after randomised think-times under ramping load, a differently
     // distributed population that would otherwise dilute this p95.
-    // A metric with zero samples (e.g. every iteration timing out before
-    // reaching a given request) otherwise reports its threshold as
-    // trivially held rather than as the measured-nothing run it actually
-    // is. k6 rejects a `count` aggregation on Trend metrics
-    // (`http_req_duration`, `browser_web_vital_lcp`) and on Rate metrics
-    // (`http_req_failed`, `checks`) alike — only Counter metrics
-    // (`http_reqs`, `iterations`) support it — so every threshold below is
-    // paired with a `count>0` sibling threshold on the matching Counter
-    // metric, same tag filter where one applies, as the sample guard.
+    //
+    // Sample guards, precisely: a metric with zero samples (e.g. every
+    // iteration timing out before reaching a given request) otherwise
+    // reports its threshold as trivially held rather than as the
+    // measured-nothing run it actually is. k6 rejects a `count`
+    // aggregation on both Trend metrics (`http_req_duration`,
+    // `browser_web_vital_lcp`) and Rate metrics (`http_req_failed`,
+    // `checks`) — confirmed with `k6 archive`, which rejects the
+    // expression at parse time; only Counter metrics support it. So:
+    //   - `http_req_duration{...}` pairs with `http_reqs{...}` (same tag
+    //     filter) as its guard, below.
+    //   - `browser_web_vital_lcp` pairs with `web_vital_navigations`, a
+    //     Counter this script increments itself (see webVitalsScenario) —
+    //     *not* `iterations{scenario:web_vitals}`, which k6 increments even
+    //     when the iteration throws, so it would still read >0 in exactly
+    //     the case this guards against (every `page.goto()` timing out
+    //     against the CDN).
+    //   - `http_req_failed` needs no metric-local guard: it and `http_reqs`
+    //     are populated by the same request population (every protocol
+    //     request marks both), so the global `http_reqs` guard below covers
+    //     it transitively.
+    //   - `checks` needs no guard at all: `rate>0.99` on zero samples
+    //     evaluates `0 > 0.99`, which is false — a Rate threshold with no
+    //     samples already fails loudly on its own, unlike Trend/Counter
+    //     percentile and count thresholds.
     'http_req_duration{name:order_submission,scenario:checkout}': ['p(95)<1000'],
     'http_reqs{name:order_submission,scenario:checkout}': ['count>0'],
     // Add-to-cart p95 < 300ms (performance-plan.md §4).
     'http_req_duration{name:add_to_cart}': ['p(95)<300'],
     'http_reqs{name:add_to_cart}': ['count>0'],
     // Request failure rate < 1% (performance-plan.md §4), across every
-    // protocol-level request in both scenarios.
+    // protocol-level request in both scenarios. Guarded transitively by the
+    // global `http_reqs` threshold below — see the note above.
     http_req_failed: ['rate<0.01'],
     // LCP p75 < 2500ms (performance-plan.md §4), from the browser-level VUs.
     browser_web_vital_lcp: ['p(75)<2500'],
-    'iterations{scenario:web_vitals}': ['count>0'],
+    web_vital_navigations: ['count>0'],
     // Every check() in this script (setup, funnel, checkout) is decorative
     // without this: a shape drift in a request payload (e.g. `:addtocart`)
     // can make demoblaze answer 200 with an error body on every call, which
     // http_req_failed never sees (still a 2xx) and which even makes
     // durations look *faster* (the server does less real work) — a run that
-    // exercised nothing would otherwise report every threshold held.
-    checks: ['rate>0.99'],
+    // exercised nothing would otherwise report every threshold held. Checks
+    // below assert response shape, not only status, so this can actually
+    // detect that case. Threshold value is per-profile (`cfg.checksThreshold`)
+    // — see PROFILES above for why smoke is deliberately looser than full.
+    checks: [cfg.checksThreshold],
     // One global sample guard: if not a single protocol request went out
     // (setup failed, DNS/network down, demoblaze unreachable), every
-    // threshold above that isn't independently guarded (http_req_failed,
-    // checks) would otherwise hold vacuously on zero samples too.
+    // threshold above that isn't independently guarded (http_req_failed)
+    // would otherwise hold vacuously on zero samples too.
     http_reqs: ['count>0'],
   },
 };
@@ -238,6 +290,51 @@ function newSessionCookie() {
 
 function pickProductId(productIds) {
   return productIds[Math.floor(Math.random() * productIds.length)];
+}
+
+// ---------------------------------------------------------------------------
+// Response-shape checks (C3). Every check() below pairs a status assertion
+// with a shape assertion: demoblaze answers 200 with an error body when a
+// request's payload shape drifts (the `/addtocart` case named in the
+// issue), which a status-only check can never see — the run would report
+// every threshold held while exercising nothing real. These are written
+// against demoblaze's documented public response schema (`Items` arrays on
+// list endpoints, a `title` field on a product, an id-like field echoed
+// back on a cart write). Live verification against demoblaze's current API
+// while writing this was attempted and blocked — the API itself returned
+// 500s to every test probe during that session — so treat these as written
+// from documented behaviour, not a fresh capture; see perf/README.md.
+// ---------------------------------------------------------------------------
+
+function hasItemsArray(r) {
+  try {
+    return Array.isArray(r.json('Items'));
+  } catch (e) {
+    return false;
+  }
+}
+
+function looksLikeProduct(r) {
+  try {
+    const title = r.json('title');
+    return typeof title === 'string' && title.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+function looksLikePersistedCartItem(r) {
+  try {
+    const body = r.json();
+    return body && typeof body === 'object' && (typeof body.id !== 'undefined' || typeof body._id !== 'undefined');
+  } catch (e) {
+    return false;
+  }
+}
+
+function isNotHtmlErrorPage(r) {
+  const body = typeof r.body === 'string' ? r.body.trim() : '';
+  return body.length > 0 && !body.startsWith('<');
 }
 
 function viewProduct(productId) {
@@ -288,7 +385,10 @@ function deleteCart(cookie, tagName) {
 
 export function setup() {
   const res = http.get(`${API_URL}/entries`, { tags: { name: 'entries' } });
-  check(res, { 'GET /entries 200': (r) => r.status === 200 });
+  check(res, {
+    'GET /entries 200': (r) => r.status === 200,
+    'GET /entries: Items is an array': hasItemsArray,
+  });
 
   let productIds = [];
   try {
@@ -317,33 +417,48 @@ export function funnelScenario(data) {
 
   // Step 1: land. 100% of sessions by definition (performance-plan.md §1).
   const entriesRes = http.get(`${API_URL}/entries`, { tags: { name: 'entries' } });
-  check(entriesRes, { 'land: entries 200': (r) => r.status === 200 });
+  check(entriesRes, {
+    'land: entries 200': (r) => r.status === 200,
+    'land: entries Items is an array': hasItemsArray,
+  });
   thinkTime();
 
   // Step 2: product view (~35%).
   if (Math.random() < P_VIEW_GIVEN_LAND) {
     const productId = pickProductId(data.productIds);
     const viewRes = viewProduct(productId);
-    check(viewRes, { 'product view 200': (r) => r.status === 200 });
+    check(viewRes, {
+      'product view 200': (r) => r.status === 200,
+      'product view: returned a product': looksLikeProduct,
+    });
     thinkTime();
 
     // Step 3: add to cart (~7.52%, conditional on having viewed a product).
     if (Math.random() < P_ADD_GIVEN_VIEW) {
       const addRes = addToCart(cookie, productId);
-      check(addRes, { 'add to cart 200': (r) => r.status === 200 });
+      check(addRes, {
+        'add to cart 200': (r) => r.status === 200,
+        'add to cart: cart item persisted': looksLikePersistedCartItem,
+      });
       cartInitiated = true;
       thinkTime();
 
       // Step 4: cart view (~6%, conditional on add-to-cart).
       if (Math.random() < P_CART_GIVEN_ADD) {
         const cartRes = viewCart(cookie);
-        check(cartRes, { 'view cart 200': (r) => r.status === 200 });
+        check(cartRes, {
+          'view cart 200': (r) => r.status === 200,
+          'view cart: Items is an array': hasItemsArray,
+        });
         thinkTime();
 
         // Step 5: purchase (~1.89%, conditional on having viewed the cart).
         if (Math.random() < P_PURCHASE_GIVEN_CART) {
           const purchaseRes = deleteCart(cookie, 'order_submission');
-          check(purchaseRes, { 'purchase (order submission) 200': (r) => r.status === 200 });
+          check(purchaseRes, {
+            'purchase (order submission) 200': (r) => r.status === 200,
+            'purchase: response is not an HTML error page': isNotHtmlErrorPage,
+          });
           cartInitiated = false; // cart already emptied by the purchase
         }
       }
@@ -367,19 +482,31 @@ export function checkoutScenario(data) {
   const productId = pickProductId(data.productIds);
 
   const viewRes = viewProduct(productId);
-  check(viewRes, { 'checkout: product view 200': (r) => r.status === 200 });
+  check(viewRes, {
+    'checkout: product view 200': (r) => r.status === 200,
+    'checkout: product view: returned a product': looksLikeProduct,
+  });
   thinkTime();
 
   const addRes = addToCart(cookie, productId);
-  check(addRes, { 'checkout: add to cart 200': (r) => r.status === 200 });
+  check(addRes, {
+    'checkout: add to cart 200': (r) => r.status === 200,
+    'checkout: add to cart: cart item persisted': looksLikePersistedCartItem,
+  });
   thinkTime();
 
   const cartRes = viewCart(cookie);
-  check(cartRes, { 'checkout: view cart 200': (r) => r.status === 200 });
+  check(cartRes, {
+    'checkout: view cart 200': (r) => r.status === 200,
+    'checkout: view cart: Items is an array': hasItemsArray,
+  });
   thinkTime();
 
   const purchaseRes = deleteCart(cookie, 'order_submission');
-  check(purchaseRes, { 'checkout: purchase (order submission) 200': (r) => r.status === 200 });
+  check(purchaseRes, {
+    'checkout: purchase (order submission) 200': (r) => r.status === 200,
+    'checkout: purchase: response is not an HTML error page': isNotHtmlErrorPage,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +520,16 @@ export async function webVitalsScenario() {
   const page = await browser.newPage();
   try {
     await page.goto(SITE_URL, { waitUntil: 'networkidle' });
+    // Counted only if goto() resolves without throwing — a CDN timeout
+    // (the exact C2 case named in the issue) throws before this line runs.
+    // The browser's own PerformanceObserver captures LCP during page load,
+    // so a navigation that reaches this point is the closest synchronous
+    // proxy this API exposes for "a vital was actually recorded". Guards
+    // the `browser_web_vital_lcp` threshold below. Deliberately not
+    // `iterations{scenario:web_vitals}`: k6 increments `iterations` even
+    // when the iteration throws, so that metric would still read >0 in
+    // exactly the case this guard exists to catch.
+    webVitalNavigations.add(1);
     thinkTime();
 
     const links = page.locator('.hrefch');
@@ -418,11 +555,20 @@ export async function webVitalsScenario() {
 //
 // This runs identically locally and in CI: `npm run perf:smoke` leaves a
 // perf-summary.json in the working directory too.
+//
+// K6_RESOLVED_VERSION (set by perf.yml, from the pinned `k6 version` at
+// install time — see C9) is folded into both outputs here, not only echoed
+// to $GITHUB_STEP_SUMMARY: into `perf-summary.json` as a top-level field,
+// and into the printed summary — which the workflow `tee`s into
+// `k6-console.log` — as a banner line. Both 90-day artifacts can say which
+// k6 produced them without cross-referencing a separate CI log.
 // ---------------------------------------------------------------------------
 
 export function handleSummary(data) {
+  const summaryOut = K6_RESOLVED_VERSION ? { ...data, k6_version: K6_RESOLVED_VERSION } : data;
+  const versionBanner = K6_RESOLVED_VERSION ? `k6 version (pinned in perf.yml): ${K6_RESOLVED_VERSION}\n\n` : '';
   return {
-    stdout: textSummary(data, { indent: ' ', enableColors: true }),
-    'perf-summary.json': JSON.stringify(data, null, 2),
+    stdout: versionBanner + textSummary(data, { indent: ' ', enableColors: true }),
+    'perf-summary.json': JSON.stringify(summaryOut, null, 2),
   };
 }
