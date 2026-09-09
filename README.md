@@ -7,10 +7,14 @@ the glossary, and `ASSUMPTIONS.md` for every place a decision had to be made rat
 
 **Read this before running anything: a green run is not the success criterion here.** Both
 systems under test are deliberately defective, and this submission asserts what they're supposed
-to do rather than what they actually do. That means **8 tests fail on purpose** — 4 in `@api`, 4
-in `@e2e` — every one of them traceable to a numbered entry in `docs/defects.md`. A run where
-everything passes would mean the tests were written by reading the code instead of the spec; see
-"Expected failures" below before treating any red test as something to fix.
+to do rather than what they actually do. That means **24 tests fail on purpose** — 13 in `@api`,
+11 in `@e2e` — every one of them traceable to a numbered entry in `docs/defects.md`. (The `@api`
+register runs `API-001`–`API-007`; six of those seven are reproduced live by a failing test, and
+the seventh, `API-004`, is a defect in `swagger.yaml` itself that no HTTP request can trigger, so
+it has none. The `@e2e` failures span nine defects, `WEB-001`, `WEB-002`, `WEB-007`, `WEB-009`
+through `WEB-014`.) A run where everything passes would mean the tests were written by reading the
+code instead of the spec; see "Expected failures" below before treating any red test as something
+to fix.
 
 ## Run everything, from a clean clone
 
@@ -43,27 +47,44 @@ npm run report
 npx playwright test --project=api --project=e2e --list
 ```
 
-lists every test title; the four `@api` and four `@e2e` failures below each carry their defect id
+lists every test title; the 13 `@api` and 11 `@e2e` failures below each carry their defect id
 directly in the title (`[API-001]`, `— WEB-009`, etc.), so `grep`-ing the HTML report or CI job
 summary for `API-` / `WEB-` is enough to confirm a failing test is expected without reading the
-test's body. The CI job summary (`.github/scripts/summarize-failures.js`) does exactly this per
-run, listed under "which defect" for each failing title.
+test's body. The CI job summary (`.github/scripts/summarize-failures.js`) sorts every non-passing
+test into a "By-design defect failures" section keyed on that same id, a "Defects that may be
+FIXED" section for the rare case where a `test.fail()` reproduction passes unexpectedly (the
+defect it names may no longer be present), and an "Unexpected failures" section for anything else.
 
 ## Expected failures
 
-Verified by running both suites (`docs/agents` conventions aside, this count was re-run against
-the actual repo state, not taken on trust from an earlier plan):
+Verified by running both suites on 2026-09-08 (`npm run test:api`, `npm run test:e2e` — `docs/agents`
+conventions aside, these counts are from that run, not taken on trust from an earlier plan or from
+a prior ticket's report):
 
-**`@api` — 4 of 13 fail** (`npm run test:api`):
+**`@api` — 13 of 21 fail** (`npm run test:api`):
 
 | Test | Defect |
 | --- | --- |
+| `malformed JSON on POST /signin gets a JSON error envelope, not an HTML stack page [API-007]` | `API-007` |
+| `POST /signin › a wrong otp for a known phone_no is rejected [API-002]` | `API-002` |
+| `POST /signin › one user's otp presented with another user's phone_no is rejected [API-002]` | `API-002` |
 | `POST /signin › a request missing otp produces the documented internal-error response [API-001]` | `API-001` |
 | `POST /signin › a request missing phone_no produces the documented internal-error response [API-001]` | `API-001` |
+| `POST /signin › an empty request body produces the documented internal-error response [API-002]` | `API-002` |
+| `POST /signin › non-string phone_no and otp (numeric coercion) do not sign in [API-006]` | `API-006` |
+| `POST /signin › non-string phone_no and otp (array coercion) do not sign in [API-006]` | `API-006` |
 | `POST /signin › the 200 response's field types match the documented schema, including status_code [API-002]` | `API-002` |
-| `GET /user/:id › API-003: does not return otp and phone_no to an unauthenticated caller` | `API-003` |
+| `GET /user/:id › a prototype-chain id ('toString') produces the documented error shape and status code [API-005]` | `API-005` |
+| `GET /user/:id › a prototype-chain id ('constructor') produces the documented error shape and status code [API-005]` | `API-005` |
+| `GET /user/:id › a prototype-chain id ('__proto__') produces the documented error shape and status code [API-005]` | `API-005` |
+| `GET /user/:id › does not return otp and phone_no to an unauthenticated caller [API-003]` | `API-003` |
 
-**`@e2e` — 4 of 10 fail** (`npm run test:e2e`; crosses the public internet to demoblaze, so this
+Six defects, `API-001`, `API-002`, `API-003`, `API-005`, `API-006` and `API-007`, are reproduced by
+one or more of the rows above. A seventh, `API-004`, is registered in `docs/defects.md` but has no
+row here: it is a contradiction inside `swagger.yaml`'s own documentation, not a defect an HTTP
+request can trigger.
+
+**`@e2e` — 11 of 26 fail** (`npm run test:e2e`; crosses the public internet to demoblaze, so this
 one is slower and, per `docs/test-plan.md`'s "case for a controlled test environment," inherently
 subject to drift the `@api` suite is not):
 
@@ -73,6 +94,17 @@ subject to drift the `@api` suite is not):
 | `TC-05: an invalid card number format is rejected — WEB-001` | `TC-05` | `WEB-001` |
 | `TC-06: an impossible expiry date is rejected — WEB-002` | `TC-06` | `WEB-002` |
 | `TC-08: adding to cart while logged out, then logging in, preserves the cart — WEB-010` | `TC-08` | `WEB-010` |
+| `TC-11: Previous returns to the preceding page, and offers nothing on the first page — WEB-011` | `TC-11` | `WEB-011` |
+| `TC-12: paging within a category keeps the category filter — WEB-012` | `TC-12` | `WEB-012` |
+| `TC-17: acknowledging the purchase confirmation closes the order modal and clears its form — WEB-013` | `TC-17` | `WEB-013` |
+| `TC-18: after a completed purchase, the navigation bar is reachable again — WEB-013` | `TC-18` | `WEB-013` |
+| `TC-19: a cart already emptied by a completed order cannot be ordered from a second time — WEB-013` | `TC-19` | `WEB-013` |
+| `TC-20: browser Back from a product opened out of a filtered listing restores that listing — WEB-014` | `TC-20` | `WEB-014` |
+| `TC-21: the add-to-cart confirmation reads the same for anonymous and logged-in shoppers — WEB-007` | `TC-21` | `WEB-007` |
+
+Nine defects fail across these eleven tests (`WEB-013` spans three: `TC-17`, `TC-18`, `TC-19`).
+Both figures — 21 `@api` tests, 13 failing; 26 `@e2e` tests, 11 failing — are from a run performed
+for this document, not carried forward from an earlier ticket's report.
 
 Every defect id above resolves to a full entry — severity, repro steps, expected vs. actual
 behaviour — in `docs/defects.md`.
@@ -85,8 +117,8 @@ specific deliverable:
 | Brief exercise | Deliverable | File(s) |
 | --- | --- | --- |
 | 1a — task list, estimates, priorities for testing the whole site | Prioritised task table, estimation basis, calendar reconciliation | `docs/test-plan.md` |
-| 1b — designed test case/scenario for the purchase flow, happy + unhappy paths | One happy path (`TC-01`) + seven unhappy paths (`TC-02`–`TC-08`), intent-level, no selectors | `docs/test-cases.md` |
-| 1c — automated test script for 1b | Page objects + Playwright specs implementing `TC-01`–`TC-08` | `tests/e2e/purchase-journey.spec.ts` (`TC-01`), `tests/e2e/cart.spec.ts` (`TC-07`, `TC-08`), `tests/e2e/checkout-validation.spec.ts` (`TC-02`–`TC-06`), page objects under `tests/e2e/pages/` |
+| 1b — designed test case/scenario for the purchase flow, happy + unhappy paths | One happy path (`TC-01`) + unhappy paths and browse/listing coverage, `TC-02`–`TC-22`, intent-level, no selectors | `docs/test-cases.md` |
+| 1c — automated test script for 1b | Page objects + Playwright specs implementing `TC-01`–`TC-22` | `tests/e2e/purchase-journey.spec.ts` (`TC-01` and the anonymous purchase journey), `tests/e2e/cart.spec.ts` (`TC-07`, `TC-08`, `TC-21`), `tests/e2e/checkout-validation.spec.ts` (`TC-02`–`TC-06`), `tests/e2e/browse.spec.ts` (`TC-09`–`TC-20`), page objects under `tests/e2e/pages/` |
 | 1d — how to performance test the site (explanation; implementation optional) | Workload model (sourced funnel, load shape, thresholds, black-box limitation, unrun profiles) **and** a working k6 script | `docs/performance-plan.md` (the explanation) + `perf/demoblaze-load.js`, `perf/README.md` (the optional implementation, done anyway) |
 | 2 — design and implement API tests against the supplied server | `@api` suite covering `/user/ids`, `/user/:id`, `/signin` across documented success/failure responses, schema, and field types | `tests/api/user.spec.ts`, `tests/api/signin.spec.ts`, `tests/api/smoke.spec.ts` |
 | 3 — CI pipeline running the above on merge | Two-job, non-blocking GitHub Actions pipeline (brief asks for GitLab CI or equivalent; GitHub Actions used, see `SPEC.md` "Toolchain"/"Pipeline") | `.github/workflows/ci.yml`, `.github/scripts/summarize-failures.js` |
@@ -94,9 +126,11 @@ specific deliverable:
 Supporting documents that don't map to a single brief line item but underpin all of them:
 `SPEC.md` (design decisions and rationale for every choice above), `CONTEXT.md` (a ten-term
 glossary used consistently across every document and test name), `docs/defects.md` (the defect
-register every failing test resolves to), `ASSUMPTIONS.md` (every place a decision had to be made
-rather than derived — including why the purchase-flow confirmation dialog is the only oracle
-available; see below).
+register every failing test resolves to), `docs/coverage-map.md` (every interaction demoblaze
+exposes, once, with what it currently costs the suite), `docs/adr/0001-pagination-oracle.md` (the
+accepted decision record arguing the pagination oracle `TC-11` and `TC-12` need), `ASSUMPTIONS.md`
+(every place a decision had to be made rather than derived — including why the purchase-flow
+confirmation dialog is the only oracle available; see below).
 
 ## Other commands
 

@@ -50,7 +50,7 @@ in `docs/defects.md`; **task N** refers to the numbered task table in `docs/test
 | `Home` nav link → `index.html` | all | yes | consciously-excluded | — | Ruled out of scope once auth/nav sat right: a plain hyperlink with no application behaviour of its own, and its one interesting property — resetting a category filter — is `TC-13`'s oracle reached through a second door. Every spec reaches home via `page.goto('/')` (`home-page.ts:14`) instead. |
 | `Contact` → `#exampleModal` | all | no | consciously-excluded | — | Out of scope for this map. |
 | `About us` → `#videoModal` (video.js player) | all | no | consciously-excluded | — | Out of scope for this map. |
-| `Cart` nav link → `cart.html` | `index.html`, `prod.html` | yes | automated (fails by design) | TC-17 | `#cartur` on `index.html`/`prod.html`. **Correction:** this row previously described the link on `cart.html` as the same `#cartur` control; on `cart.html` it is `<a href="#" onclick="showcart()">`, with no `#cartur` id and no navigation, and is out of scope for this row. `CartPage.open()` uses `page.goto('/cart.html')` for its own navigation steps (`cart-page.ts:11-19`), but `TC-17` deliberately clicks this link as the control under test, after a completed purchase — where it demonstrates `WEB-013`: the still-open order modal intercepts the click. |
+| `Cart` nav link → `cart.html` | `index.html`, `prod.html` | yes | automated (fails by design) | TC-18 | `#cartur` on `index.html`/`prod.html`. **Correction:** this row previously described the link on `cart.html` as the same `#cartur` control; on `cart.html` it is `<a href="#" onclick="showcart()">`, with no `#cartur` id and no navigation, and is out of scope for this row. `CartPage.open()` uses `page.goto('/cart.html')` for its own navigation steps (`cart-page.ts:11-19`), but `TC-18` deliberately clicks this link as the control under test, after a completed purchase — where it demonstrates `WEB-013`: the still-open order modal intercepts the click. |
 | `Cart` nav link (`onclick="showcart()"`, no id, no navigation) | `cart.html` | no | consciously-excluded | — | A same-page refresh of the cart the shopper is already viewing; distinct control from the `#cartur` link above. No application behaviour to assert. |
 | `Log in` link (`#login2`) → `#logInModal` | all | yes | automated | TC-01 | `HomePage.logIn()`. |
 | `Sign up` link (`#signin2`) → `#signInModal` | all | yes | automated | TC-01 | `HomePage.signUp()`. |
@@ -112,9 +112,9 @@ assertions needed and could not have been written without.
 | Product description (`.description`) | product | yes | automated | TC-01 | Asserted non-empty only; the text itself is not compared to the listing card. |
 | Product image | product | yes | costed-in-plan-not-automated | — | Task 3. |
 | `Add to cart` (`onclick="addToCart(N)"`) + native alert | product | yes | automated | TC-01, TC-07, TC-08 | `ProductPage.addToCart()` registers the dialog handler before the click (SPEC.md "Dialog handling") and asserts the message matches `/added/i`. |
-| Add-to-cart alert text differs anonymous vs logged in | product | yes | automated (fails by design) | TC-19 | `WEB-007`. `TC-19` compares the two states' messages to each other rather than hardcoding either literal — the four journey call sites still use the intent-level `/added/i`, since wording was never their subject. |
+| Add-to-cart alert text differs anonymous vs logged in | product | yes | automated (fails by design) | TC-21 | `WEB-007`. `TC-21` compares the two states' messages to each other rather than hardcoding either literal — the journey call sites still use the intent-level `/added/i`, since wording was never their subject. |
 | Detail-page tabs (`#myTab`, single empty `<li class="active">`) | product | no | consciously-excluded | — | Renders as an empty pill list; no interaction available. |
-| Browser Back from a product opened out of a filtered listing | product | yes | automated (fails by design) | TC-18 | `WEB-014`. Filtering is pure client-side JS (`href="#"`, `byCat()`) and never enters the URL, so a filtered listing has no address; Back lands on the unfiltered first page instead of the filtered listing. |
+| Browser Back from a product opened out of a filtered listing | product | yes | automated (fails by design) | TC-20 | `WEB-014`. Filtering is pure client-side JS (`href="#"`, `byCat()`) and never enters the URL, so a filtered listing has no address; Back lands on the unfiltered first page instead of the filtered listing. |
 
 ### Cart page (`cart.html`)
 
@@ -145,7 +145,7 @@ assertions needed and could not have been written without.
 | `Purchase` button (`onclick="purchaseOrder()"`) | cart | yes | automated | TC-01–TC-06 | |
 | Inline error label (`#errors`) | cart | yes | costed-in-plan-not-automated | — | Task 9. TC-03/TC-04 assert only that *no confirmation appears*; the message shown to the shopper is never read. |
 | `Close` button / `×` dismiss | cart | no | consciously-excluded | — | Out of scope for this map (modal dismiss paths). |
-| Modal state after dismissing a successful purchase's confirmation | cart | yes | automated (fails by design) | TC-17 | `WEB-013`. `#orderModal` is never dismissed: it stays full-viewport with the shopper's name and full card number still in the form, intercepting the whole nav bar, and a second `Purchase` books a duplicate order for a fabricated amount. |
+| Modal state after dismissing a successful purchase's confirmation | cart | yes | automated (fails by design) | TC-17, TC-19 | `WEB-013`. `#orderModal` is never dismissed: it stays full-viewport with the shopper's name and full card number still in the form (`TC-17`), intercepting the whole nav bar (`TC-18`, above), and a second `Purchase` is accepted rather than refused (`TC-19` — the case's oracle stops at "accepted or refused"; that the accepted duplicate carries a different order id and a fabricated amount is established by exploration probes, not by this test — see `docs/defects.md`'s `WEB-013` entry). |
 
 ### Order confirmation (SweetAlert `.sweet-alert`)
 
@@ -199,15 +199,17 @@ assertions needed and could not have been written without.
 The nine rows marked *fails by design* are the empty-cart guard (TC-02 / `WEB-009`), cart
 survival across log-in (TC-08 / `WEB-010`), `Previous` from page 2 and from page 1 (TC-11 /
 `WEB-011`, two rows), pagination discarding a category filter (TC-12 / `WEB-012`), the
-add-to-cart wording mismatch (TC-19 / `WEB-007`), browser Back discarding a filtered listing
-(TC-18 / `WEB-014`), and the still-open order modal after purchase (TC-17 / `WEB-013`, two rows:
-the nav `Cart` link it blocks, and the modal's own state). The remaining two designed failures,
-TC-05 (`WEB-001`) and TC-06 (`WEB-002`), sit inside rows marked plainly `automated` — the
-`Credit card` and `Month`/`Year` fields — because those same rows also carry passing assertions.
-Across these nine rows plus the two `automated` rows above, nine distinct `WEB-` ids fail by
-design in total (`WEB-011` and `WEB-013` each span two rows; the other seven span one each),
-matching `docs/test-cases.md` and the `@e2e` suite's actual result: 24 tests, 15 pass, 9 fail by
-design.
+add-to-cart wording mismatch (TC-21 / `WEB-007`), browser Back discarding a filtered listing
+(TC-20 / `WEB-014`), and the still-open order modal after purchase (TC-17/TC-18/TC-19 / `WEB-013`,
+two rows: the nav `Cart` link it blocks, and the modal's own state). The remaining two designed
+failures, TC-05 (`WEB-001`) and TC-06 (`WEB-002`), sit inside rows marked plainly `automated` —
+the `Credit card` and `Month`/`Year` fields — because those same rows also carry passing
+assertions. Across these nine rows plus the two `automated` rows above, nine distinct `WEB-` ids
+fail by design in total (`WEB-011` and `WEB-013` each span two rows; the other seven span one
+each) — this row count is unchanged by `WEB-013` now having three test cases (`TC-17`, `TC-18`,
+`TC-19`) instead of one, since the underlying interactions those cases assert on are still the
+same two rows. Matching `docs/test-cases.md` and the `@e2e` suite's actual result: 26 tests, 15
+pass, 11 fail by design, across these same nine distinct defects.
 
 Rows are counted per *interaction*, so one test case can appear on several rows (TC-01 touches
 nine) and one row can carry several cases.
@@ -228,7 +230,8 @@ handling, and stays costed under task 6 rather than being automated as browse/pu
 That line puts these **inside** the flow, and they are automated:
 
 - sign up (TC-01 step 2) and log in (step 3) — the preconditions of an authenticated purchase;
-- the anonymous purchase path (`purchase-journey.spec.ts`), which proves auth is optional to buying;
+- the anonymous purchase path (`TC-22`, `purchase-journey.spec.ts`), which proves auth is optional
+  to buying;
 - cart survival across log-in (TC-08 / `WEB-010`) — the one place auth demonstrably changes what
   is in the cart;
 - logging out (TC-16) — the mirror case, promoted rather than parked (below).

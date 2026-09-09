@@ -14,34 +14,40 @@ documented behaviour.
 - `API-001`, `API-002` and `API-003` were originally verified by reading `api-main/server.js`
   against `api-main/swagger.yaml` line for line, before the `@api` suite existed. `api-main` was
   not modified (it is a read-only system under test). They are now **reproduced live**: the
-  `@api` suite (`tests/api/signin.spec.ts`, `tests/api/user.spec.ts`, issue #27) drives each of
+  `@api` suite (`tests/api/signin.spec.ts`, `tests/api/user.spec.ts`) drives each of
   them over HTTP every run — `AC-15`/`AC-16` for `API-001`, `AC-13`/`AC-14`/`AC-17`/`AC-20` for
   `API-002`, `AC-10` for `API-003` (`docs/test-cases.md`). `API-004` is the exception: it is a
   defect in `swagger.yaml`'s own documentation (its `404` example contradicts its own `status`
   field), which no HTTP request can reproduce — comparing two static passages is the whole test —
   so it remains verified by static source inspection alone.
-- `WEB-001` through `WEB-008` were identified during design, by reading `SPEC.md`'s "Defects
+- `WEB-001` and `WEB-002` were identified during design, by reading `SPEC.md`'s "Defects
   identified during design" section and reasoning about demoblaze's documented/expected
-  behaviour. They are **design-time assertions, not yet reproduced against the live site** by
+  behaviour. They are now **reproduced live**: the `@e2e` suite (`tests/e2e/checkout-validation.spec.ts`,
+  `TC-05` and `TC-06`) drives each of them against the live site every run and is what `README.md`
+  lists as a live failure — they are no longer design-time-only assertions.
+- `WEB-003` through `WEB-006` and `WEB-008` were identified during design, by the same reading of
+  `SPEC.md`. They are **design-time assertions, not yet reproduced against the live site** by
   this register — demoblaze is third-party infrastructure this ticket does not drive a browser
-  against. The `@e2e` suite (a later ticket) is what actually reproduces them; each entry's repro
-  steps are written as the manual steps that suite will automate.
+  against, and no later `@e2e` ticket added a test for these. Each entry's repro steps are written
+  as the manual steps a future test would automate.
 - `WEB-009` and `WEB-010` were **not** identified during design; they were found once the `@e2e`
-  suite actually drove a browser against the live site (issues #10 and #9 respectively), and
-  each was **reproduced live** by the test named in its Verification line. Their repro steps
-  describe what that test actually did, not a manual procedure still to be automated.
+  suite actually drove a browser against the live site, while implementing the checkout-validation
+  and cart-behaviour specs respectively, and each was **reproduced live** by the test named in its
+  Verification line. Their repro steps describe what that test actually did, not a manual
+  procedure still to be automated.
 - `WEB-011` and `WEB-012` were **not** identified during design; they were found by throwaway
-  exploration scripts driving the live site (issues #16 and #18), argued into defects rather than
-  design-time assumptions by `docs/adr/0001-pagination-oracle.md`, and are now **reproduced live**
-  by the `@e2e` suite.
-- `WEB-013` and `WEB-014` were likewise found live, by issue #22's and #17's exploration scripts
-  respectively, and are now reproduced live by the `@e2e` suite.
+  exploration scripts driving the live site while inventorying the coverage map, argued into
+  defects rather than design-time assumptions by `docs/adr/0001-pagination-oracle.md`, and are now
+  **reproduced live** by the `@e2e` suite.
+- `WEB-013` and `WEB-014` were likewise found live, by throwaway exploration scripts driving the
+  live site during the same browse/listing coverage work, and are now reproduced live by the
+  `@e2e` suite.
 - `WEB-007` was identified during design but, as first implemented, asserted too loosely
   (`/added/i`) to distinguish the two wordings it claims differ. It is now **reproduced live** by
-  `TC-19`, which compares the two states' messages to each other rather than certifying either as
+  `TC-21`, which compares the two states' messages to each other rather than certifying either as
   correct.
 - `API-005`, `API-006` and `API-007` did not exist when the four entries above were written. They
-  were assigned once the `@api` suite (issue #27) actually drove HTTP requests against a running
+  were assigned once the `@api` suite actually drove HTTP requests against a running
   instance and found behaviour the first four entries did not cover, and are **reproduced live**:
   confirmed against a local instance on 2026-09-08, independently by this register entry's author
   re-running the same requests by hand against a freshly started local instance the same day.
@@ -158,8 +164,9 @@ documented behaviour.
 ### API-005 — `GET /user/:id` walks the prototype chain instead of checking `user_data`'s own keys
 
 - **Severity:** High
-- **Verification:** reproduced live against a local instance — confirmed by issue #27 and
-  independently re-confirmed by this register entry's author, both on 2026-09-08.
+- **Verification:** reproduced live against a local instance — confirmed when the `@api` suite
+  drove HTTP requests against a running instance, and independently re-confirmed by this
+  register entry's author, both on 2026-09-08.
 - **Spec reference:** `api-main/swagger.yaml:79-92` documents `400` and a JSON error body
   (`{status_code: "400", message: string}`) for any `id` that is not a valid user id, with no
   carve-out for a particular class of invalid id.
@@ -187,8 +194,9 @@ documented behaviour.
 ### API-006 — `POST /signin` compares credentials with loose `==`, so non-string values coerce and match
 
 - **Severity:** Medium
-- **Verification:** reproduced live against a local instance — confirmed by issue #27 and
-  independently re-confirmed by this register entry's author, both on 2026-09-08.
+- **Verification:** reproduced live against a local instance — confirmed when the `@api` suite
+  drove HTTP requests against a running instance, and independently re-confirmed by this
+  register entry's author, both on 2026-09-08.
 - **Spec reference:** `api-main/swagger.yaml:109-112` types both `phone_no` and `otp` as
   `string` in `/signin`'s request body schema.
 - **Location:** `api-main/server.js:63` — `if ((body.phone_no == data.phone_no) && (body.otp ==
@@ -213,10 +221,11 @@ documented behaviour.
 ### API-007 — Malformed JSON on `POST /signin` returns an HTML stack-trace page instead of a JSON error envelope
 
 - **Severity:** Medium
-- **Verification:** reproduced live against a local instance — confirmed by issue #27 and
-  independently re-confirmed by this register entry's author, both on 2026-09-08. Assigned by
-  this ticket (#28), which is what let the id be threaded into the title of the test that
-  demonstrates it, `tests/api/edge-cases.spec.ts:8`.
+- **Verification:** reproduced live against a local instance — confirmed when the `@api` suite
+  drove HTTP requests against a running instance, and independently re-confirmed by this register
+  entry's author, both on 2026-09-08. Assigned by the ticket that wrote this register entry, which
+  is what let the id be threaded into the title of the test that demonstrates it,
+  `tests/api/edge-cases.spec.ts:8`.
 - **Spec reference:** every one of `/signin`'s three documented responses — `200`
   (`swagger.yaml:116-149`), `404` (`:150-169`), `500` (`:170-189`) — shares the same JSON error
   envelope shape (`{status_code, status, data, message}`) and a JSON content-type; there is no
@@ -320,7 +329,7 @@ documented behaviour.
 
 - **Severity:** Low
 - **Verification:** identified during design (SPEC.md). Reproduced live by the `@e2e` suite
-  (`tests/e2e/cart.spec.ts`, `TC-19`): the anonymous confirmation reads `Product added` and the
+  (`tests/e2e/cart.spec.ts`, `TC-21`): the anonymous confirmation reads `Product added` and the
   logged-in confirmation reads `Product added.` — a trailing full stop — across six anonymous and
   five logged-in runs, no exceptions.
 - **Steps to reproduce:** add a product to the cart while logged out and note the confirmation
@@ -329,7 +338,7 @@ documented behaviour.
   of authentication state, so shoppers get a consistent signal that the action registered.
 - **Actual behaviour:** the confirmation text differs between the logged-in and anonymous
   states.
-- Demonstrated by `TC-19` in `docs/test-cases.md`.
+- Demonstrated by `TC-21` in `docs/test-cases.md`.
 
 ### WEB-008 — Cart total is computed across a request-per-item sequence and is observably racy
 
@@ -351,8 +360,8 @@ documented behaviour.
 - **Severity:** Medium
 - **Verification:** reproduced live by the `@e2e` suite (`tests/e2e/checkout-validation.spec.ts`,
   `TC-02`) on 2026-09-07, three consecutive runs. Not identified during design — found while
-  implementing issue #10, when the live site's actual behaviour did not match `TC-02`'s
-  design-time assumption that demoblaze enforces a non-empty cart.
+  implementing the checkout-validation suite, when the live site's actual behaviour did not match
+  `TC-02`'s design-time assumption that demoblaze enforces a non-empty cart.
 - **Steps to reproduce:** log in with a fresh account (cart guaranteed
   empty), navigate directly to `/cart.html`, click "Place Order" with no
   items in the cart, fill the order form with valid-looking values, submit.
@@ -371,9 +380,9 @@ documented behaviour.
 
 - **Severity:** Medium
 - **Verification:** reproduced live by the `@e2e` suite (`tests/e2e/cart.spec.ts`, `TC-08`). Not
-  identified during design — found while implementing issue #9, when the live site's actual
-  behaviour did not match `TC-08`'s design-time assumption that a cart built while logged out
-  survives logging in.
+  identified during design — found while implementing the cart-behaviour suite, when the live
+  site's actual behaviour did not match `TC-08`'s design-time assumption that a cart built while
+  logged out survives logging in.
 - **Steps to reproduce:** while logged out, add a product to the cart (observe the `addtocart`
   request keyed by the anonymous `user` cookie), open the cart to confirm the item is there, then
   log in with an existing account and open the cart again.
@@ -391,9 +400,10 @@ documented behaviour.
 
 - **Severity:** High
 - **Verification:** observed live on 2026-09-07 and again on 2026-09-08 by throwaway exploration
-  scripts (issue #16 and issue #18's measurement comment), reproduced across independent runs on
-  each occasion. Not identified during design. Reproduced live by the `@e2e` suite
-  (`tests/e2e/browse.spec.ts`, `TC-11`).
+  scripts driving the live site while inventorying the coverage map and again while measuring for
+  the pagination-oracle decision record, reproduced across independent runs on each occasion. Not
+  identified during design. Reproduced live by the `@e2e` suite (`tests/e2e/browse.spec.ts`,
+  `TC-11`).
 - **Steps to reproduce:** land on the home page with no category filter applied. Note the nine
   products shown, the first being "Samsung galaxy s6". Click `Next` and note the six products
   shown. Click `Previous`. Note the products now shown, and that "Samsung galaxy s6" is not among
@@ -423,9 +433,9 @@ documented behaviour.
 ### WEB-012 — Pagination silently discards the active category filter
 
 - **Severity:** Medium
-- **Verification:** observed live on 2026-09-07 by the throwaway exploration script recorded in
-  issue #16, in all three categories. Not identified during design. Reproduced live by the `@e2e`
-  suite (`tests/e2e/browse.spec.ts`, `TC-12`).
+- **Verification:** observed live on 2026-09-07 by the throwaway exploration script driving the
+  live site while inventorying the coverage map, in all three categories. Not identified during
+  design. Reproduced live by the `@e2e` suite (`tests/e2e/browse.spec.ts`, `TC-12`).
 - **Steps to reproduce:** from the home page select the `Phones` category and note that seven
   products are shown, all phones. Observe that `Next` is visible. Click it and note the products
   now shown. Repeat with `Laptops` (six products) and `Monitors` (two products).
@@ -448,7 +458,10 @@ documented behaviour.
 - **Severity:** High
 - **Verification:** observed live on 2026-09-08 by throwaway exploration scripts, reproduced
   across two independent probes (8 runs and 2 runs), anonymous and logged in. Not identified
-  during design. Reproduced live by the `@e2e` suite (`tests/e2e/browse.spec.ts`, `TC-17`).
+  during design. Reproduced live by the `@e2e` suite (`tests/e2e/browse.spec.ts`, `TC-17`,
+  `TC-18` and `TC-19` — the case originally designed as one `TC-17` was split into three so each
+  symptom below is independently exercised and reported; see "Demonstrated by" below for exactly
+  what each of the three proves).
 - **Steps to reproduce:** add a product to the cart, open the cart and click `Place Order`.
   Complete the form and click `Purchase`. Note the confirmation and its order id, then dismiss it
   with `OK`. Observe the order modal. Attempt to click any link in the navigation bar. Click
@@ -470,13 +483,22 @@ documented behaviour.
   reasonable thing to do when the form is still in front of them and nothing indicates the order
   completed — places a duplicate order for a fabricated amount. It also leaves a full card number
   on screen after the transaction the shopper believes is finished.
-- Demonstrated by `TC-17` in `docs/test-cases.md`.
+- **Demonstrated by `TC-17`, `TC-18` and `TC-19` in `docs/test-cases.md`, each for a narrower
+  claim than the "Actual behaviour" paragraph above states in full.** `TC-17` asserts the modal
+  stays open and the form stays populated; `TC-18` asserts the nav bar stays unreachable behind
+  it; `TC-19` asserts only that no confirmation appears for a duplicate submission when the
+  `Purchase` button is still reachable, or that the modal is genuinely closed when it is not.
+  None of the three reads the duplicate order's id or its fabricated amount — "a second, different
+  order id" and the `105730 USD`/`360 USD` figures above come from the exploration probes this
+  entry's Verification line cites, not from an automated assertion. A reviewer should not read
+  `TC-19` as proving the fabricated-amount claim; only the probes do.
 
 ### WEB-014 — A filtered listing has no address, and browser Back discards the filter
 
 - **Severity:** Low
-- **Verification:** observed live on 2026-09-08 by a throwaway exploration script (issue #17).
-  Reproduced live by the `@e2e` suite (`tests/e2e/browse.spec.ts`, `TC-18`).
+- **Verification:** observed live on 2026-09-08 by a throwaway exploration script driving the
+  live site during the browse/listing coverage work. Reproduced live by the `@e2e` suite
+  (`tests/e2e/browse.spec.ts`, `TC-20`).
 - **Steps to reproduce:** from the home page select the `Laptops` category and note the listing.
   Note the browser's address bar. Open a product from the filtered listing, then press the
   browser's Back button.
@@ -490,4 +512,4 @@ documented behaviour.
 - **Severity note:** Low. It costs the shopper a re-click rather than money or access, and no
   product becomes unreachable. Recorded because it is a real loss of a shopper's stated intent,
   not because it blocks a journey.
-- Demonstrated by `TC-18` in `docs/test-cases.md`.
+- Demonstrated by `TC-20` in `docs/test-cases.md`.
