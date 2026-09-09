@@ -68,9 +68,11 @@ no staging or mirrored environment, per "The case for a controlled test environm
 - Every defect found is recorded in `docs/defects.md` with severity, repro steps, and
   expected/actual behaviour, and every test that fails by design carries that defect's id in its
   title — the traceability `SPEC.md`'s "Further Notes" commits to.
-- `npm run test:e2e` runs to completion and the CI `e2e` job reports without erroring. A green
-  run is not required: the by-design failures are the deliverable, not a bug to clear before
-  sign-off (see the README's "Expected failures").
+- `npm run test:e2e` runs to completion and the CI `e2e` job produces a summary rather than a
+  broken run. A green job is not the bar and will not happen while the defects stand: any
+  non-passing test turns the job red, by-design reproductions included, so red is the expected
+  steady state and the summary is what is read (see the README's "Expected failures"). What must
+  not appear is a BROKEN RUN or an unexpected failure with no defect id.
 - Remaining gaps are enumerated, not silent: rows still `costed-in-plan-not-automated` in
   `docs/coverage-map.md` are the honest remainder the QA lead signs off against, not an implied
   completeness.

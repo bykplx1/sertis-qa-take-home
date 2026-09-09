@@ -16,6 +16,16 @@ through `WEB-014`.) A run where everything passes would mean the tests were writ
 code instead of the spec; see "Expected failures" below before treating any red test as something
 to fix.
 
+The pipeline says the same thing in the same voice: **the CI jobs are red, on purpose, and will
+stay red while the systems under test stay defective.** Any non-passing test fails its job, the
+24 by-design reproductions included, because a green tick over a run whose entire product is a
+defect register would be the one genuinely misleading artifact in this repository. Red here
+blocks nothing — no branch protection or required check references these jobs — it just refuses
+to certify as clean a run that was not. Open the job summary: it leads with why it is red and
+sorts every non-passing test into by-design defects, defects that may now be fixed, suspected
+demoblaze outages, and unexpected failures. The last of those four is the only one that means
+something is wrong with this repository.
+
 ## Run everything, from a clean clone
 
 ```
@@ -121,7 +131,7 @@ specific deliverable:
 | 1c — automated test script for 1b | Page objects + Playwright specs implementing `TC-01`–`TC-22` | `tests/e2e/purchase-journey.spec.ts` (`TC-01` and the anonymous purchase journey), `tests/e2e/cart.spec.ts` (`TC-07`, `TC-08`, `TC-21`), `tests/e2e/checkout-validation.spec.ts` (`TC-02`–`TC-06`), `tests/e2e/browse.spec.ts` (`TC-09`–`TC-20`), page objects under `tests/e2e/pages/` |
 | 1d — how to performance test the site (explanation; implementation optional) | Workload model (sourced funnel, load shape, thresholds, black-box limitation, unrun profiles) **and** a working k6 script | `docs/performance-plan.md` (the explanation) + `perf/demoblaze-load.js`, `perf/README.md` (the optional implementation, done anyway) |
 | 2 — design and implement API tests against the supplied server | `@api` suite covering `/user/ids`, `/user/:id`, `/signin` across documented success/failure responses, schema, and field types | `tests/api/user.spec.ts`, `tests/api/signin.spec.ts`, `tests/api/smoke.spec.ts` |
-| 3 — CI pipeline running the above on merge | Two-job, non-blocking GitHub Actions pipeline (brief asks for GitLab CI or equivalent; GitHub Actions used, see `SPEC.md` "Toolchain"/"Pipeline") | `.github/workflows/ci.yml`, `.github/scripts/summarize-failures.js` |
+| 3 — CI pipeline running the above on merge | Two-job GitHub Actions pipeline; red whenever any test does not pass, blocking nothing (no branch protection) — see `SPEC.md` "Toolchain"/"Pipeline" (brief asks for GitLab CI or equivalent; GitHub Actions used) | `.github/workflows/ci.yml`, `.github/scripts/summarize-failures.js` |
 
 Supporting documents that don't map to a single brief line item but underpin all of them:
 `SPEC.md` (design decisions and rationale for every choice above), `CONTEXT.md` (a ten-term
