@@ -8,19 +8,20 @@ import { CATEGORY, PRODUCT_NAME, VALID_ORDER_DETAILS } from './support/test-data
 import { type Account } from './support/random-account';
 import { test, expect } from './fixtures';
 
-// TC-09 through TC-18 in the ticket that wrote them (issue #20; the cases
+// TC-09 through TC-20 in the ticket that wrote them (issue #20; the cases
 // themselves are drafted in #21, #17 and #22 and land in docs/test-cases.md
 // separately from this ticket, per issue #20's scope). Covers the browse
 // and listing surface: pagination (TC-09-TC-12), category filtering and
 // card/detail agreement (TC-13-TC-15), log out (TC-16), the post-purchase
-// nav bar (TC-17) and the filtered listing's browser history (TC-18).
+// order modal and nav bar (TC-17-TC-19) and the filtered listing's browser
+// history (TC-20).
 //
 // Four of these fail by design: WEB-011 (TC-11), WEB-012 (TC-12), WEB-013
-// (TC-17), WEB-014 (TC-18). Together with TC-19 (WEB-007, cart.spec.ts —
+// (TC-17-TC-19), WEB-014 (TC-20). Together with TC-21 (WEB-007, cart.spec.ts —
 // not this file, since it belongs next to the add-to-cart tests it
 // extends), the suite's by-design failure count goes from four to nine
-// (docs/adr/0001-pagination-oracle.md, issue #21). TC-17 is further split
-// into three tests below (issue #26 E4), so the by-design *test* count is
+// (docs/adr/0001-pagination-oracle.md, issue #21). The original TC-17 is
+// split into three tests below (issue #26 E4), so the by-design *test* count is
 // eleven even though the by-design *defect* count is still nine.
 //
 // The nine by-design defect reproductions in this file and cart.spec.ts are
@@ -263,7 +264,7 @@ for (const authState of AUTH_STATES) {
       // window is never disturbed, so this stays linear in the number of
       // products instead of the re-pagination an O(n^2) walk would
       // otherwise need, and it never relies on browser Back, which
-      // WEB-014 (TC-18) shows does not return to a paginated window.
+      // WEB-014 (TC-20) shows does not return to a paginated window.
       while (hasMorePages) {
         const window = await listingPage.productNames();
 
@@ -345,7 +346,7 @@ test("TC-16: logging out hides the account's cart, and logging back in restores 
   expect(await cartPage.stableTotal()).toBe(price);
 });
 
-// TC-17 originally bundled three WEB-013 claims (modal closes and clears,
+// One case originally bundled three WEB-013 claims (modal closes and clears,
 // the nav bar is reachable again, a second Purchase is refused) into one
 // test. Only the first `expect` was ever reached: once it failed, the
 // nav-bar and duplicate-order assertions never executed, yet the case as a
@@ -355,8 +356,7 @@ test("TC-16: logging out hides the account's cart, and logging back in restores 
 // each independently completing its own purchase through the shared
 // `completedPurchase()` helper, so each symptom is actually exercised and
 // separately reported (issue #26 E4). What the three now prove, for the
-// documentation ticket that reconciles `docs/test-cases.md`'s TC-17 against
-// this split:
+// record, matching `docs/test-cases.md`'s TC-17, TC-18 and TC-19:
 //   1. acknowledging the purchase confirmation closes the order modal and
 //      clears its form;
 //   2. after acknowledging, the navigation bar is reachable again;
@@ -378,7 +378,7 @@ test("TC-16: logging out hides the account's cart, and logging back in restores 
 /**
  * Signs up, logs in, adds the one product this suite uses, places an order
  * with valid-looking details, and acknowledges the confirmation. Shared by
- * TC-17's three split tests (issue #26 E4) so each independently reaches
+ * TC-17, TC-18 and TC-19 (issue #26 E4) so each independently reaches
  * the state WEB-013 is about, rather than one test's assertion failure
  * hiding the other two symptoms from ever being exercised.
  */
@@ -412,7 +412,7 @@ async function completedPurchase(
 }
 
 test.fail(
-  'TC-17a: acknowledging the purchase confirmation closes the order modal and clears its form — WEB-013 @e2e',
+  'TC-17: acknowledging the purchase confirmation closes the order modal and clears its form — WEB-013 @e2e',
   async ({ homePage, productPage, cartPage, checkoutModal, listingPage, freshAccount }) => {
     await completedPurchase(homePage, productPage, cartPage, checkoutModal, listingPage, freshAccount);
 
@@ -433,7 +433,7 @@ test.fail(
 );
 
 test.fail(
-  'TC-17b: after a completed purchase, the navigation bar is reachable again — WEB-013 @e2e',
+  'TC-18: after a completed purchase, the navigation bar is reachable again — WEB-013 @e2e',
   async ({ homePage, productPage, cartPage, checkoutModal, listingPage, freshAccount }) => {
     await completedPurchase(homePage, productPage, cartPage, checkoutModal, listingPage, freshAccount);
 
@@ -447,7 +447,7 @@ test.fail(
 );
 
 test.fail(
-  'TC-17c: a cart already emptied by a completed order cannot be ordered from a second time — WEB-013 @e2e',
+  'TC-19: a cart already emptied by a completed order cannot be ordered from a second time — WEB-013 @e2e',
   async ({ homePage, productPage, cartPage, checkoutModal, listingPage, freshAccount }) => {
     await completedPurchase(homePage, productPage, cartPage, checkoutModal, listingPage, freshAccount);
 
@@ -478,10 +478,10 @@ test.fail(
   },
 );
 
-// TC-18: a filtered listing has no address, and browser Back discards the
+// TC-20: a filtered listing has no address, and browser Back discards the
 // filter — WEB-014.
 test.fail(
-  'TC-18: browser Back from a product opened out of a filtered listing restores that listing — WEB-014 @e2e',
+  'TC-20: browser Back from a product opened out of a filtered listing restores that listing — WEB-014 @e2e',
   async ({ page, homePage, listingPage }) => {
     await homePage.goto();
     await listingPage.waitUntilLoaded();

@@ -66,7 +66,7 @@ export class CheckoutModal {
   /**
    * Attempts `submit()` within a bounded timeout and reports whether the
    * click actually landed, instead of letting a click on an unreachable
-   * button throw uncaught. Exists for TC-17c (`WEB-013`, issue #26 review
+   * button throw uncaught. Exists for TC-19 (`WEB-013`, issue #26 review
    * item 1): once the order modal genuinely closes (the defect fixed), its
    * `Purchase` button becomes unreachable, and an unconditional `submit()`
    * would still time out on it — the *same* failure as while the defect is

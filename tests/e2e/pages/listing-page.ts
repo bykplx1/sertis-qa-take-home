@@ -125,7 +125,7 @@ export class ListingPage {
    * one away from its page window — keeping that check linear in the
    * number of products, instead of the re-pagination an O(n^2) walk would
    * otherwise need, and without relying on browser Back, which WEB-014
-   * (TC-18) shows does not return to a filtered or paginated window.
+   * (TC-20) shows does not return to a filtered or paginated window.
    */
   async hrefFor(productName: string): Promise<string> {
     const href = await this.cardFor(productName).locator('h4.card-title a').getAttribute('href');
@@ -239,7 +239,7 @@ export class ListingPage {
    * for the detail page's navigation to commit before returning (issue #25
    * E9) — moved here from `HomePage`, which had no notion of the page it
    * was navigating to and left `goBack()` racing this click's dispatch
-   * rather than its commit (E3; TC-18, `WEB-014`).
+   * rather than its commit (E3; TC-20, `WEB-014`).
    */
   async openProduct(productName: string): Promise<void> {
     await this.page.getByRole('link', { name: productName, exact: true }).click();

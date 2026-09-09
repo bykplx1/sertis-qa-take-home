@@ -73,7 +73,7 @@ export class HomePage {
    * Follows the nav bar's `Cart` link — deliberately different from
    * `CartPage.open()`'s direct `goto('/cart.html')`, which exists
    * specifically to route around this control after a purchase (WEB-013,
-   * `tests/e2e/pages/cart-page.ts`). This method is how TC-17 reaches the
+   * `tests/e2e/pages/cart-page.ts`). This method is how TC-18 reaches the
    * control it is actually testing, with a short click timeout so the
    * defect's permanent interception fails fast rather than waiting out
    * Playwright's default.

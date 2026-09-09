@@ -37,7 +37,7 @@ test('TC-01: sign up, add to cart, place an order, see confirmation @e2e', async
   // 6. Add the product to the cart and acknowledge the add-to-cart confirmation.
   // Intent-level match: this journey's subject is that adding registers at
   // all, not the confirmation's exact wording. The wording's consistency
-  // across auth states is TC-19's subject (cart.spec.ts, WEB-007).
+  // across auth states is TC-21's subject (cart.spec.ts, WEB-007).
   const addToCartMessage = await productPage.addToCart();
   expect(addToCartMessage).toMatch(/added/i);
 
@@ -80,7 +80,7 @@ test('TC-01: sign up, add to cart, place an order, see confirmation @e2e', async
 // account: demoblaze scopes the anonymous cart to a per-browser-session
 // cookie, so an anonymous purchase is a legitimate, supported path and not
 // merely a truncated version of TC-01.
-test('anonymous shopper can add to cart and place an order without an account @e2e', async ({
+test('TC-22: an anonymous shopper can add to cart and place an order without an account @e2e', async ({
   homePage,
   productPage,
   cartPage,

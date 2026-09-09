@@ -149,7 +149,7 @@ test.fail(
   },
 );
 
-// TC-19: the add-to-cart confirmation for the same product reads the same
+// TC-21: the add-to-cart confirmation for the same product reads the same
 // whether the shopper is anonymous or logged in — WEB-007. There is one
 // intended confirmation for "a product was added"; auth state is not part
 // of that intent (SPEC.md "Assertion basis": "no test is written to
@@ -163,7 +163,7 @@ test.fail(
 // Declared with `test.fail()` (issue #26 E10), for the same reason as
 // TC-08 above: a known-failing defect reproduction, not a flaky assertion.
 test.fail(
-  'TC-19: the add-to-cart confirmation reads the same for anonymous and logged-in shoppers — WEB-007 @e2e',
+  'TC-21: the add-to-cart confirmation reads the same for anonymous and logged-in shoppers — WEB-007 @e2e',
   async ({ homePage, productPage, listingPage, freshAccount }) => {
     await homePage.goto();
     await listingPage.waitUntilLoaded();

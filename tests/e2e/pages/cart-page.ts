@@ -15,7 +15,7 @@ const MAX_POLL_ATTEMPTS = 60; // ~15s ceiling
  * show"`, `display: block`, form still populated — and Playwright names
  * the interceptor as `<input id="name">` inside that still-open modal's
  * subtree, not its backdrop. A direct navigation sidesteps it entirely.
- * This workaround is correct and must stay; `WEB-013`'s own case (TC-17,
+ * This workaround is correct and must stay; `WEB-013`'s own cases (TC-17-TC-19,
  * `tests/e2e/browse.spec.ts`) is what deliberately clicks the nav link
  * instead, as the control under test.
  */
