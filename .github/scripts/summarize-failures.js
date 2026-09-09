@@ -170,6 +170,23 @@ function renderSummary(entries, stats) {
     return lines.join('\n');
   }
 
+  // Why this run is red, stated before the buckets rather than left for the
+  // reader to infer from a red X in the sidebar. Under the current policy
+  // ANY non-passing test fails the job, by-design defect reproductions
+  // included: a green check on a run that just reproduced nineteen defects
+  // asserts something untrue about the systems under test, and the summary
+  // it hides is the exact artifact a QA reader came for. Red here is a
+  // statement about demoblaze and api-main, not about this repository's own
+  // code, and it blocks nothing - no branch protection references these jobs
+  // (SPEC.md, Out of Scope).
+  lines.push(
+    `**This job is red because ${entries.length} test(s) did not pass.** Every non-passing ` +
+      'result fails the job, including the by-design defect reproductions below. The ' +
+      'breakdown that follows is the point of the run: read it before treating red as a ' +
+      'regression. Nothing is gated on this check.',
+  );
+  lines.push('');
+
   if (byDefect.length > 0) {
     lines.push('### By-design defect failures (expected - see `docs/defects.md`)');
     lines.push('');
@@ -366,6 +383,23 @@ function main() {
   }
 
   writeSummary(renderSummary(nonPassing, stats));
+
+  // The verdict. Exit 1 - distinct from reportBrokenRun's 2 - when the run
+  // produced any non-passing result at all. This step is deliberately not
+  // wrapped in `continue-on-error` in ci.yml, so this is what turns the job
+  // red.
+  //
+  // `nonPassing` is the right population and `stats.expected` is not: a
+  // `test.fail()` reproduction failing as declared is `expected` to
+  // Playwright and leaves its exit code at 0, which is precisely the green
+  // that hid the defect register from anyone reading the check rather than
+  // the summary. collectNonPassing already keeps those entries (see its
+  // `expectedStatus === 'failed'` carve-out), so counting it here covers
+  // failures, flakes, unexpected passes and declared reproductions in one
+  // number without re-deriving any of them.
+  if (nonPassing.length > 0) {
+    process.exitCode = 1;
+  }
 }
 
 main();

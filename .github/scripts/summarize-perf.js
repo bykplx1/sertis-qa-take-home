@@ -108,12 +108,18 @@ function keyMetrics(metrics) {
 
 const summary = readSummary(summaryPath);
 
+// Accumulates this step's own verdict as the sections below decide it.
+// Applied once, at the foot of the file, after everything has rendered — the
+// summary must be written whatever the outcome, so nothing here exits early.
+let perfExitCode = 0;
+
 say(`## Performance run — \`${profile}\` profile`);
 say('');
 
 if (summary === null) {
   // No summary file, or an unreadable one. k6 never got far enough to
   // report, so there is no verdict to render — say so loudly.
+  perfExitCode = 2;
   say('### :rotating_light: BROKEN RUN — no summary produced');
   say('');
   say(
@@ -137,7 +143,19 @@ if (summary === null) {
   const vacuous = thresholds.filter((t) => t.samples === 0);
   const breached = thresholds.filter((t) => !t.ok && t.samples !== 0);
 
+  // Failed `check()`s, counted independently of whether the `checks`
+  // threshold survived them. The two are not the same question: `full`
+  // tolerates up to 1% and `smoke` up to 20%, so a run can fail real checks
+  // and still hold every threshold — which used to render as an unqualified
+  // green. Under the current policy any failed check is red, because a
+  // check that failed is a fact about demoblaze that a green tick would
+  // conceal.
+  const checkValues = (metrics.checks && metrics.checks.values) || {};
+  const checkFails = typeof checkValues.fails === 'number' ? checkValues.fails : 0;
+  const checkPasses = typeof checkValues.passes === 'number' ? checkValues.passes : 0;
+
   if (thresholds.length === 0) {
+    perfExitCode = 1;
     say('### :warning: No thresholds evaluated');
     say('');
     say(
@@ -146,6 +164,7 @@ if (summary === null) {
         'survived, and that the tagged requests the thresholds reference actually ran.',
     );
   } else if (vacuous.length > 0) {
+    perfExitCode = 1;
     say(`### :rotating_light: ${vacuous.length} of ${thresholds.length} threshold(s) measured ZERO samples`);
     say('');
     say(
@@ -160,12 +179,33 @@ if (summary === null) {
   } else if (breached.length === 0) {
     say(`### :white_check_mark: All ${thresholds.length} thresholds held`);
   } else {
+    perfExitCode = 1;
     say(`### :x: ${breached.length} of ${thresholds.length} thresholds breached`);
     say('');
     say(
-      'A breach is a **result, not a failure of the pipeline** — the script is designed to ' +
-        'produce a verdict (`perf/README.md`). Thresholds are defined in ' +
-        '`docs/performance-plan.md` §4.',
+      'A breach is a **result about demoblaze**, not a broken pipeline — the script is designed ' +
+        'to produce a verdict (`perf/README.md`). It fails this job so the verdict cannot be ' +
+        'read as green, and gates nothing: no branch protection references this workflow ' +
+        '(`SPEC.md`, Out of Scope). Thresholds are defined in `docs/performance-plan.md` §4.',
+    );
+  }
+
+  // Reported as its own line whether or not a threshold noticed it. A run
+  // where every threshold held and 201 checks failed is not a clean run, and
+  // said only in the k6 console output it would be a fact buried in an
+  // artifact nobody opens.
+  if (checkFails > 0) {
+    perfExitCode = 1;
+    say('');
+    say(`### :x: ${checkFails} failed \`check()\`s (${checkPasses} passed)`);
+    say('');
+    say(
+      'Any failed check fails this job, independently of the `checks` threshold above — that ' +
+        'threshold budgets for third-party noise (1% on `full`, 20% on `smoke`), so it can hold ' +
+        'over real failures. A check asserts response *shape*, not just status, so a failure ' +
+        'here means demoblaze answered something the script did not expect — or that the check ' +
+        'itself encodes a wrong expectation. Both want a human; neither is green. The failing ' +
+        'check names are in `k6-console.log`, attached to this run.',
     );
   }
 
@@ -208,6 +248,16 @@ if (summary === null) {
       'much**, never **why** — there is no server-side visibility into demoblaze ' +
       '(`docs/performance-plan.md` §7).',
   );
+}
+
+// The verdict, mirroring `.github/scripts/summarize-failures.js`: any
+// non-clean result exits non-zero, and this step is not wrapped in
+// `continue-on-error`, so it is what turns the job red. `perf.yml`'s final
+// step still fails on k6's own exit code — a threshold breach exits 99 there
+// — but that step cannot see a failed check that no threshold caught, which
+// is the gap this closes.
+if (typeof perfExitCode === 'number' && perfExitCode !== 0) {
+  process.exitCode = perfExitCode;
 }
 
 const rendered = out.join('\n') + '\n';

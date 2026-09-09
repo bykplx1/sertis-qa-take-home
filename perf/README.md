@@ -124,17 +124,29 @@ a bug: the script is designed to produce a verdict, not a chart. k6 exits `99`
 on a breach.
 
 **Checks.** Every `check()` in the script (setup, funnel, checkout) asserts
-both the response status *and* response shape — e.g. that `/addtocart`'s
-response looks like a persisted cart item, not just that it returned 200 —
-because demoblaze can answer 200 with an error body when a request's payload
-shape drifts, which a status-only check would never see (`checks:
-['rate>0.99']` on `full` would then be near-decorative, passing everything
-`http_req_failed` already passes). The shape checks are written from
-demoblaze's documented public response schema; live verification against the
-current API was attempted while writing this and blocked by the API itself
-returning 500s to every test probe during that session, so treat them as
-written from documented behaviour, not a fresh capture, and worth
-re-confirming against a live `full` run.
+both the response status *and* response shape, because demoblaze can answer
+200 with an error body when a request's payload shape drifts, which a
+status-only check would never see (`checks: ['rate>0.99']` on `full` would
+then be near-decorative, passing everything `http_req_failed` already
+passes).
+
+The shape checks were originally written from demoblaze's documented schema
+because live verification was blocked by the API returning 500s to every
+probe, and that caveat hid a false assumption: `/addtocart` was assumed to
+echo an id-like field back, so the check asserted a persisted-looking cart
+item in its response. It does not — a successful `/addtocart` returns **200
+with a zero-byte body**. The check could never pass, and failed 201 times out
+of 201 on the first `full` pipeline run, breaching the `checks` threshold on
+the script's own bug rather than on anything demoblaze did.
+
+The shapes are now verified live against `api.demoblaze.com` (2026-09-09) and
+the assertion sits where the fact is observable: `/addtocart`'s own response
+is asserted to be *empty* (an HTML error page or JSON error payload there is
+precisely the 200-did-nothing drift), and **persistence is asserted on the
+following `/viewcart` read** — the added `prod_id` must come back in `Items`.
+That is a stronger oracle than the original intent, not a weaker one: it
+proves the write reached the store rather than that the response was
+well-formed.
 
 The `checks` threshold value is per-profile, not one number: `> 99%` on
 `full`, `> 80%` on `smoke`. `smoke` yields roughly 25-40 checks total (seconds

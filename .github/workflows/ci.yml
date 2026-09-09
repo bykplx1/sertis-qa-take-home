@@ -1,15 +1,28 @@
 name: CI
 
 # Runs both suites and attaches evidence of the run to every pull request.
-# There is deliberately no branch-protection or required-check configuration
-# here or anywhere else in the repo - see SPEC.md "Pipeline" and issue #11.
-# The non-gating policy has a precise scope, though: a red @e2e/@api *test*
-# result never blocks anything - a defect lives in a product this repo does
-# not own (api-main, demoblaze), and freezing this repository over it
-# achieves nothing. A BROKEN RUN (the suite producing no usable results at
-# all) and a type error in this repo's own code are not test results to
-# report on - both are allowed to fail their job. See the "Summarize
-# failures" and "Type-check" steps below.
+#
+# Red and blocking are separate things here, and the distinction is the whole
+# policy. There is deliberately no branch-protection or required-check
+# configuration in this repo - see SPEC.md "Pipeline" and issue #11 - so a red
+# job blocks no merge and freezes nothing. What red means is that the run
+# produced something a human should read.
+#
+# Under that separation, ANY non-passing test fails its job, by-design defect
+# reproductions included. The earlier policy kept these jobs green over a
+# suite that reproduces nineteen defects in demoblaze and api-main, on the
+# reasoning that the defects live in products this repo does not own. That
+# reasoning holds for *blocking* and does not hold for *colour*: a green check
+# on a run whose whole value is a defect register asserts something untrue
+# about the systems under test, and buries the summary a QA reader came for
+# behind a tick they have no reason to click. The verdict lives in
+# .github/scripts/summarize-failures.js (exit 1 for any non-passing result,
+# exit 2 for a broken run) and is rendered, with its reason, into every run
+# summary.
+#
+# A BROKEN RUN (the suite producing no usable results at all) and a type error
+# in this repo's own code are still distinguished from test results, and still
+# fail their job - see the "Summarize failures" and "Type-check" steps below.
 on:
   pull_request:
   push:
@@ -54,13 +67,17 @@ jobs:
       # Chromium only, per issue #11 - the e2e-firefox/e2e-webkit projects
       # and the k6 performance script are never invoked in the pipeline.
       #
-      # This step exits 0 unconditionally (it records the test process's
-      # real exit code in `run_tests_exit_code` first) so the job's outcome
-      # is never gated on the suite going red - see the header comment.
-      # `continue-on-error` stays on as a backstop for the case the shell
-      # itself doesn't reach the `exit 0` line (e.g. the runner kills the
-      # step). Either way, the real exit code is passed to the summarizer
-      # below so a broken run is never silently reported as clean - see
+      # This step still exits 0 unconditionally, recording the test process's
+      # real exit code first. That is no longer about keeping the job green -
+      # the summarizer below fails it on any non-passing test - but about
+      # keeping the verdict in ONE place: Playwright's exit code cannot tell a
+      # `test.fail()` reproduction that failed as declared (exit 0) from a
+      # genuinely clean run, which is exactly the distinction this job now
+      # turns on. Letting the summary step decide means the colour and the
+      # reason for it are computed from the same data. `continue-on-error`
+      # stays on as a backstop for the case the shell doesn't reach `exit 0`
+      # (e.g. the runner kills the step); the real exit code still reaches the
+      # summarizer, so a broken run is never reported as clean - see
       # .github/scripts/summarize-failures.js's "BROKEN RUN" handling.
       - name: Run @e2e suite against demoblaze
         id: run_tests
@@ -74,12 +91,14 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      # Not wrapped in continue-on-error: summarize-failures.js sets
-      # process.exitCode = 2 only when the run is BROKEN (missing/unparseable
-      # results, or a report describing zero executed tests) - never for a
-      # normal report with failing/flaky tests. That's the one case this job
-      # is allowed to go red on. A broken run is not a test failure, so the
-      # non-gating policy for test failures (SPEC.md:19) stays untouched.
+      # Not wrapped in continue-on-error - this step IS the job's verdict.
+      # summarize-failures.js exits 1 when the run produced any non-passing
+      # result (failures, flakes, unexpected passes, and by-design defect
+      # reproductions alike) and 2 when the run is BROKEN (missing or
+      # unparseable results, or a report describing zero executed tests). The
+      # two codes are kept distinct because the summary reads differently:
+      # one is a statement about the system under test, the other about the
+      # pipeline. Neither blocks a merge; see the header comment.
       - name: Summarize failures (by defect id)
         if: always()
         run: |
@@ -144,9 +163,9 @@ jobs:
       # longer goes unnoticed.
       #
       # See the e2e job's identical comment above: this always exits 0 after
-      # capturing the real exit code, so the job's outcome is never gated on
-      # the suite going red, but the real code still reaches the summarizer
-      # so a broken run can't render as a false pass.
+      # capturing the real exit code, so that the summarize step below is the
+      # single place the job's colour is decided, while the real code still
+      # reaches the summarizer so a broken run can't render as a false pass.
       - name: Run @api suite (starts local api-main automatically)
         id: run_tests
         continue-on-error: true
@@ -160,9 +179,9 @@ jobs:
           exit 0
 
       # See the e2e job's identical comment above: not wrapped in
-      # continue-on-error, since summarize-failures.js only sets
-      # process.exitCode = 2 for a BROKEN RUN, never for a normal report with
-      # failing/flaky tests.
+      # continue-on-error, because this step is the job's verdict -
+      # summarize-failures.js exits 1 for any non-passing result and 2 for a
+      # broken run.
       - name: Summarize failures (by defect id)
         if: always()
         run: |

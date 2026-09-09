@@ -90,15 +90,53 @@ jobs:
           K6_VERSION: '2.2.0'
         run: |
           set -e
-          sudo gpg --no-default-keyring \
-            --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
-            --keyserver hkp://keyserver.ubuntu.com:80 \
-            --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          # `sudo gpg --recv-keys` runs as root, and a fresh ubuntu-latest
+          # runner has no /root/.gnupg. Without that directory gpg cannot
+          # create the socket it talks to dirmngr over, so the keyserver fetch
+          # below died with "can't connect to the dirmngr" before apt was ever
+          # involved. `gpg -k` is Grafana's documented no-op whose entire job
+          # is to create /root/.gnupg first; dirmngr is then started on demand
+          # by `--recv-keys` itself — nothing here starts it, and nothing needs
+          # to. Installing gnupg2/dirmngr is belt-and-braces rather than the
+          # fix: both ship on the current runner image, and the line exists so
+          # that an image which one day drops one fails here with a legible apt
+          # error instead of inside gpg's socket handling. It carries its own
+          # `apt-get update` because the k6 source is not added until further
+          # down, and the update that follows that addition comes too late to
+          # serve this install.
+          sudo apt-get update
+          sudo apt-get install -y gnupg2 dirmngr
+          sudo gpg -k
+
+          # The keyserver is third-party infrastructure this repo has no claim
+          # on, and a timeout reaching it is a flake, not a verdict. Retry
+          # before giving up, and if it still will not answer, fail with an
+          # annotation that says so: under `set -e` a bare gpg error here
+          # aborts the step with nothing in the run header, and reads like a
+          # broken pin rather than a bad afternoon on keyserver.ubuntu.com.
+          for attempt in 1 2 3; do
+            if sudo gpg --no-default-keyring \
+              --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+              --keyserver hkp://keyserver.ubuntu.com:80 \
+              --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "::error::Could not fetch k6's signing key from hkp://keyserver.ubuntu.com:80 after 3 attempts. That is a keyserver or network failure, not a k6 problem and not a threshold breach — re-run the workflow."
+              exit 1
+            fi
+            echo "Keyserver fetch failed (attempt ${attempt}/3); retrying in $((attempt * 5))s."
+            sleep "$((attempt * 5))"
+          done
           echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
             | sudo tee /etc/apt/sources.list.d/k6.list
           sudo apt-get update
           if ! sudo apt-get install -y "k6=${K6_VERSION}"; then
-            echo "::error::k6 ${K6_VERSION} is not available from dl.k6.io/deb (stable) any more. Check https://dl.k6.io/deb/dists/stable/main/binary-amd64/Packages for the current exact Version string and update K6_VERSION in this step — do not fall back to an unpinned install."
+            echo "::error::k6 ${K6_VERSION} is not available from dl.k6.io/deb (stable) any more. The versions apt can actually see are dumped further down this step's log — take the exact Version string from there (or from https://dl.k6.io/deb/dists/stable/main/binary-amd64/Packages) and update K6_VERSION in this step. Do not fall back to an unpinned install."
+            echo "--- apt-cache madison k6 ---"
+            apt-cache madison k6 || true
+            echo "--- apt-cache policy k6 ---"
+            apt-cache policy k6 || true
             exit 1
           fi
           k6 version

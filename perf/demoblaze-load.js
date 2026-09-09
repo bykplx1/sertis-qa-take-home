@@ -298,12 +298,16 @@ function pickProductId(productIds) {
 // request's payload shape drifts (the `/addtocart` case named in the
 // issue), which a status-only check can never see — the run would report
 // every threshold held while exercising nothing real. These are written
-// against demoblaze's documented public response schema (`Items` arrays on
-// list endpoints, a `title` field on a product, an id-like field echoed
-// back on a cart write). Live verification against demoblaze's current API
-// while writing this was attempted and blocked — the API itself returned
-// 500s to every test probe during that session — so treat these as written
-// from documented behaviour, not a fresh capture; see perf/README.md.
+// against demoblaze's public response schema (`Items` arrays on list
+// endpoints, a `title` field on a product), verified live against
+// api.demoblaze.com on 2026-09-09 — an earlier attempt was blocked by the
+// API returning 500s to every probe, and one assumption written from
+// documentation in the meantime turned out to be false. `/addtocart` does
+// *not* echo an id-like field back; it answers 200 with a zero-byte body.
+// A check asserting that echo could never pass, and duly failed 201 times
+// out of 201 in the first full pipeline run. What the write's own response
+// can honestly carry is asserted below; whether the item persisted is
+// asserted where it is observable, on the `/viewcart` read.
 // ---------------------------------------------------------------------------
 
 function hasItemsArray(r) {
@@ -323,13 +327,30 @@ function looksLikeProduct(r) {
   }
 }
 
-function looksLikePersistedCartItem(r) {
-  try {
-    const body = r.json();
-    return body && typeof body === 'object' && (typeof body.id !== 'undefined' || typeof body._id !== 'undefined');
-  } catch (e) {
-    return false;
-  }
+/** A successful `/addtocart` returns an empty body, so emptiness is the
+ * whole of what this response can attest. That still catches the shape
+ * drift this family of checks exists for: an HTML error page or a JSON
+ * error payload arriving here with a 200 is exactly the "answered 200,
+ * did nothing" case, and it is no longer empty. */
+function isEmptyBody(r) {
+  if (r.body === null || typeof r.body === 'undefined') return true;
+  return typeof r.body === 'string' && r.body.trim().length === 0;
+}
+
+/** The real persistence oracle. Reads the cart back and asserts the product
+ * just added is in it — the only place in this API where "the write stuck"
+ * is observable at all. Returns a predicate so the check can close over the
+ * id the calling iteration actually added, rather than asserting the weaker
+ * "some item came back". */
+function cartContains(productId) {
+  return (r) => {
+    try {
+      const items = r.json('Items');
+      return Array.isArray(items) && items.some((item) => String(item.prod_id) === String(productId));
+    } catch (e) {
+      return false;
+    }
+  };
 }
 
 function isNotHtmlErrorPage(r) {
@@ -438,7 +459,7 @@ export function funnelScenario(data) {
       const addRes = addToCart(cookie, productId);
       check(addRes, {
         'add to cart 200': (r) => r.status === 200,
-        'add to cart: cart item persisted': looksLikePersistedCartItem,
+        'add to cart: no error payload returned': isEmptyBody,
       });
       cartInitiated = true;
       thinkTime();
@@ -449,6 +470,7 @@ export function funnelScenario(data) {
         check(cartRes, {
           'view cart 200': (r) => r.status === 200,
           'view cart: Items is an array': hasItemsArray,
+          'view cart: the added product persisted': cartContains(productId),
         });
         thinkTime();
 
@@ -491,7 +513,7 @@ export function checkoutScenario(data) {
   const addRes = addToCart(cookie, productId);
   check(addRes, {
     'checkout: add to cart 200': (r) => r.status === 200,
-    'checkout: add to cart: cart item persisted': looksLikePersistedCartItem,
+    'checkout: add to cart: no error payload returned': isEmptyBody,
   });
   thinkTime();
 
@@ -499,6 +521,7 @@ export function checkoutScenario(data) {
   check(cartRes, {
     'checkout: view cart 200': (r) => r.status === 200,
     'checkout: view cart: Items is an array': hasItemsArray,
+    'checkout: view cart: the added product persisted': cartContains(productId),
   });
   thinkTime();
 
