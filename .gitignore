@@ -13,6 +13,3 @@ playwright/.cache/
 # uploads it as an artifact rather than committing it.
 perf-summary.json
 k6-console.log
-
-# Agent worktrees created by Claude Code
-.claude/worktrees/

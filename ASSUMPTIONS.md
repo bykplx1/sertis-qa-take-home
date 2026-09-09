@@ -2,9 +2,8 @@
 
 Every place this submission had to decide something the brief or the systems under test left
 open. Collected in one file so a reviewer can judge the reasoning even where they disagree with
-the conclusion — see `docs/agents/domain.md`'s single-context principle, applied here to
-assumptions rather than terminology. Each entry says what was assumed, why, and where to read the
-full reasoning if it goes deeper than a paragraph.
+the conclusion. Each entry says what was assumed, why, and where to read the full reasoning if it
+goes deeper than a paragraph.
 
 ## The one the acceptance criteria calls out by name
 

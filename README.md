@@ -67,9 +67,9 @@ defect it names may no longer be present), and an "Unexpected failures" section 
 
 ## Expected failures
 
-Verified by running both suites on 2026-09-08 (`npm run test:api`, `npm run test:e2e` — `docs/agents`
-conventions aside, these counts are from that run, not taken on trust from an earlier plan or from
-a prior ticket's report):
+Verified by running both suites on 2026-09-08 (`npm run test:api`, `npm run test:e2e` — these
+counts are from that run, not taken on trust from an earlier plan or from a prior ticket's
+report):
 
 **`@api` — 13 of 21 fail** (`npm run test:api`):
 
