@@ -90,6 +90,17 @@ jobs:
           K6_VERSION: '2.2.0'
         run: |
           set -e
+          # `sudo gpg --recv-keys` runs as root, and a fresh ubuntu-latest
+          # runner has no /root/.gnupg and no running dirmngr — the keyserver
+          # fetch below dies with "can't connect to the dirmngr" before it
+          # ever gets to apt. `gnupg2`/`dirmngr` are Grafana's documented
+          # prerequisites for this exact install sequence, and `gpg -k` is
+          # their documented no-op that only exists to make gpg create
+          # /root/.gnupg (and start dirmngr in it) before anything tries to
+          # use it in anger.
+          sudo apt-get update
+          sudo apt-get install -y gnupg2 dirmngr
+          sudo gpg -k
           sudo gpg --no-default-keyring \
             --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
             --keyserver hkp://keyserver.ubuntu.com:80 \
@@ -98,7 +109,11 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/k6.list
           sudo apt-get update
           if ! sudo apt-get install -y "k6=${K6_VERSION}"; then
-            echo "::error::k6 ${K6_VERSION} is not available from dl.k6.io/deb (stable) any more. Check https://dl.k6.io/deb/dists/stable/main/binary-amd64/Packages for the current exact Version string and update K6_VERSION in this step — do not fall back to an unpinned install."
+            echo "::error::k6 ${K6_VERSION} is not available from dl.k6.io/deb (stable) any more. Candidate versions follow (also in this step's own log, above the error) — check apt-cache madison output below for the current exact Version string and update K6_VERSION in this step — do not fall back to an unpinned install."
+            echo "--- apt-cache madison k6 ---"
+            apt-cache madison k6 || true
+            echo "--- apt-cache policy k6 ---"
+            apt-cache policy k6 || true
             exit 1
           fi
           k6 version
